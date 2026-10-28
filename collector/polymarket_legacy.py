@@ -1,11 +1,16 @@
 """Cotes des anciens marchés Polymarket (avant fin 2022), reconstruites depuis la blockchain Polygon.
 
 Ces marchés étaient des automates (FPMM, « Fixed Product Market Maker ») : l'API d'historique de
-Polymarket ne les couvre pas. Chaque achat, vente ou apport de liquidité est en revanche resté
-inscrit sur Polygon. On rejoue ces événements pour retrouver les réserves de l'automate, d'où
-découle la cote : pour un marché Oui/Non, P(Oui) = réserve Non / (réserve Oui + réserve Non).
+Polymarket ne les couvre pas. Leur cote se déduit de leurs réserves de parts Oui et Non :
+P(Oui) = réserve Non / (réserve Oui + réserve Non).
 
-Il faut un accès Polygon qui sert l'historique (archive) : $POLYGON_RPC_URL, par exemple
+Deux façons de retrouver ces réserves dans le passé :
+- « state » (par défaut) : lire les soldes de l'automate à une date donnée (eth_call sur un bloc
+  passé), toutes les 2 heures. Marche avec un accès archive gratuit (Alchemy) ;
+- « logs » : rejouer chaque achat, vente et apport de liquidité (eth_getLogs). Plus fin, mais il faut
+  un accès qui accepte de grandes plages de blocs (offres payantes) : $LEGACY_METHOD=logs.
+
+Accès Polygon avec historique requis : $POLYGON_RPC_URL, par exemple
 https://polygon-mainnet.g.alchemy.com/v2/<clé> (compte Alchemy gratuit).
 """
 import json
@@ -13,15 +18,17 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 
 from .config import ELECTIONS
 from .http import get_json
 
 GAMMA = "https://gamma-api.polymarket.com"
-CTF = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"  # contrat Conditional Tokens de Polymarket sur Polygon
+CTF = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"  # contrat Conditional Tokens (parts Oui/Non) sur Polygon
+BALANCE_OF_BATCH = "0x4e1273f4"                     # balanceOfBatch(address[],uint256[])
+STEP = 2 * 3600                                     # un relevé toutes les 2 heures (méthode « state »)
 
-# keccak256 des signatures d'événements du contrat FixedProductMarketMaker (Gnosis).
+# keccak256 des signatures d'événements du contrat FixedProductMarketMaker (Gnosis), méthode « logs ».
 BUY = "0x4f62630f51608fc8a7603a9391a5101e58bd7c276139366fc107dc3b67c3dcf8"      # FPMMBuy(address,uint256,uint256,uint256,uint256)
 SELL = "0xadcf2a240ed9300d681d9a3f5382b6c1beed1b7e46643e0c7b42cbe6e2d766b4"     # FPMMSell(address,uint256,uint256,uint256,uint256)
 ADDED = "0xec2dc3e5a3bb9aa0a1deb905d2bd23640d07f107e6ceb484024501aad964a951"    # FPMMFundingAdded(address,uint256[],uint256)
@@ -50,7 +57,7 @@ class Rpc:
             except (urllib.error.URLError, TimeoutError):
                 if attempt == retries - 1:
                     raise
-                time.sleep(2 ** attempt)
+            time.sleep(2 ** attempt)
 
     def timestamp(self, block):
         if block not in self._ts:
@@ -68,42 +75,10 @@ class Rpc:
                 hi = mid
         return lo
 
-    def clock(self, start, end, step=20000):
-        """Heure estimée d'un bloc, interpolée entre des blocs relevés tous les `step` blocs.
-
-        Les blocs Polygon arrivent environ toutes les 2 secondes : l'erreur reste de quelques
-        secondes, et on évite une requête par bloc échangé.
-        """
-        marks = list(range(start, end, step)) + [end]
-        known = [(b, self.timestamp(b)) for b in marks]
-
-        def at(block):
-            for (b0, t0), (b1, t1) in zip(known, known[1:]):
-                if block <= b1:
-                    return t0 + (t1 - t0) * (block - b0) / max(1, b1 - b0)
-            return known[-1][1]
-        return at
-
-    def transfers(self, start, end, **direction):
-        """Transferts ERC-1155 (parts Oui/Non) vers ou depuis une adresse, via alchemy_getAssetTransfers.
-
-        Fonction propre à Alchemy, disponible en offre gratuite : 1 000 transferts par page, sans
-        limite de plage de blocs (contrairement à eth_getLogs), avec l'heure de chaque bloc.
-        """
-        out, page = [], None
-        while True:
-            params = {"fromBlock": hex(start), "toBlock": hex(end), "category": ["erc1155"],
-                      "withMetadata": True, "excludeZeroValue": False,
-                      "maxCount": hex(1000), "order": "asc", **direction}
-            if not os.environ.get("LEGACY_DEBUG"):
-                params["contractAddresses"] = [CTF]
-            if page:
-                params["pageKey"] = page
-            res = self.call("alchemy_getAssetTransfers", [params])
-            out += res["transfers"]
-            page = res.get("pageKey")
-            if not page:
-                return out
+    def marks(self, start, end, step=20000):
+        """Blocs repères (bloc, heure) tous les `step` blocs : les blocs Polygon arrivent environ
+        toutes les 2 secondes, une interpolation entre repères suffit à quelques secondes près."""
+        return [(b, self.timestamp(b)) for b in list(range(start, end, step)) + [end]]
 
     def logs(self, addresses, start, end):
         out, a = [], start
@@ -114,43 +89,24 @@ class Rpc:
             a = b + 1
         return out
 
+    def balances(self, holder, token_ids, block):
+        """Soldes ERC-1155 de `holder` au bloc donné (lecture d'état passé, accès archive)."""
+        word = lambda n: format(n, "064x")
+        n = len(token_ids)
+        data = (BALANCE_OF_BATCH + word(0x40) + word(0x40 + 0x20 * (n + 1)) + word(n)
+                + "".join(word(int(holder, 16)) for _ in token_ids) + word(n) + "".join(word(t) for t in token_ids))
+        raw = self.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
+        words = [int(raw[i:i + 64], 16) for i in range(0, len(raw), 64)]
+        return words[2:2 + n]  # offset, longueur, puis les soldes
 
-def replay_transfers(rpc, fpmm, yes_id, no_id, start, end):
-    """Cote après chaque transaction, à partir des parts Oui/Non entrées et sorties de l'automate.
 
-    Les réserves de l'automate sont ses soldes de parts Oui et Non ; P(Oui) = Non / (Oui + Non).
-    Renvoie [(horodatage, P(Oui))].
-    """
-    moves = {}
-    for sign, direction in ((1, {"toAddress": fpmm}), (-1, {"fromAddress": fpmm})):
-        found = rpc.transfers(start, end, **direction)
-        if os.environ.get("LEGACY_DEBUG"):
-            tokens = {}
-            for t in found:
-                for meta in t.get("erc1155Metadata") or []:
-                    tokens[meta["tokenId"]] = tokens.get(meta["tokenId"], 0) + 1
-            print(f"  [diagnostic] {fpmm} {list(direction)[0]} : {len(found)} transferts, contrats "
-                  f"{sorted({t.get('rawContract', {}).get('address') for t in found})}, parts {tokens} ; "
-                  f"attendues Oui={hex(yes_id)} Non={hex(no_id)}")
-        for t in found:
-            log_index = int(t["uniqueId"].rsplit(":", 1)[-1], 0)
-            key = (int(t["blockNum"], 16), t["hash"])
-            when = int(datetime.fromisoformat(t["metadata"]["blockTimestamp"].replace("Z", "+00:00")).timestamp())
-            entry = moves.setdefault(key, {"order": log_index, "ts": when, "yes": 0, "no": 0})
-            entry["order"] = min(entry["order"], log_index)
-            for meta in t.get("erc1155Metadata") or []:
-                token, value = int(meta["tokenId"], 16), int(meta["value"], 16)
-                if token == yes_id:
-                    entry["yes"] += sign * value
-                elif token == no_id:
-                    entry["no"] += sign * value
-    yes = no = 0
-    prices = []
-    for (block, _), e in sorted(moves.items(), key=lambda kv: (kv[0][0], kv[1]["order"])):
-        yes, no = yes + e["yes"], no + e["no"]
-        if yes > 0 and no > 0:
-            prices.append((e["ts"], no / (yes + no)))
-    return prices
+def _interpolate(marks, x, by_time):
+    """Bloc → heure (by_time=False) ou heure → bloc (by_time=True), par interpolation entre repères."""
+    i, j = (1, 0) if by_time else (0, 1)
+    for a, b in zip(marks, marks[1:]):
+        if x <= b[i]:
+            return a[j] + (b[j] - a[j]) * (x - a[i]) / max(1, b[i] - a[i])
+    return marks[-1][j]
 
 
 def _words(data):
@@ -159,7 +115,7 @@ def _words(data):
 
 
 def replay(logs):
-    """Rejoue les événements d'un automate à 2 issues ; renvoie [(bloc, P(Oui))] après chaque échange."""
+    """Méthode « logs » : rejoue les événements d'un automate à 2 issues ; renvoie [(bloc, P(Oui))]."""
     bal, prices = [0, 0], []
     for log in sorted(logs, key=lambda l: (int(l["blockNumber"], 16), int(l["logIndex"], 16))):
         topic, w = log["topics"][0], _words(log["data"])
@@ -180,52 +136,43 @@ def replay(logs):
     return prices
 
 
-def probe(rpc, fpmm, start, end):
-    """Diagnostic : ce que l'accès Polygon accepte pour cet automate (types de transferts, plages de logs)."""
-    for cat in (["external"], ["erc20"], ["erc1155"]):
-        for direction in ({"toAddress": fpmm}, {"fromAddress": fpmm}):
-            try:
-                res = rpc.call("alchemy_getAssetTransfers", [{"fromBlock": hex(start), "toBlock": hex(end), "category": cat,
-                                                              "maxCount": hex(5), **direction}])
-                print(f"  [diagnostic] transferts {cat[0]} {list(direction)[0]} : {len(res['transfers'])} (5 max)")
-            except Exception as e:
-                print(f"  [diagnostic] transferts {cat[0]} {list(direction)[0]} : refus {e}")
-    for size in (10, 500, 2000, 10000):
-        try:
-            res = rpc.call("eth_getLogs", [{"address": fpmm, "fromBlock": hex(23646250), "toBlock": hex(23646250 + size - 1)}])
-            print(f"  [diagnostic] eth_getLogs {size} blocs : {len(res)} événements")
-        except Exception as e:
-            print(f"  [diagnostic] eth_getLogs {size} blocs : refus {str(e)[:250]}")
+def sample(rpc, marks, fpmm, yes_id, no_id, t_start, t_end):
+    """Méthode « state » : réserves Oui/Non de l'automate toutes les STEP secondes ; [(heure, P(Oui))]."""
+    out = []
+    for ts in range(t_start // STEP * STEP + STEP, t_end, STEP):
+        block = int(_interpolate(marks, ts, by_time=True))
+        yes, no = rpc.balances(fpmm, [yes_id, no_id], block)
+        if yes > 0 and no > 0:
+            out.append((ts, no / (yes + no)))
+    return out
 
 
 def collect(con, election_ids=None):
     url = os.environ.get("POLYGON_RPC_URL")
     if not url:
         raise RuntimeError("POLYGON_RPC_URL manquant : accès Polygon avec historique (ex. Alchemy, compte gratuit).")
+    method = os.environ.get("LEGACY_METHOD", "state")
     rpc = Rpc(url, int(os.environ.get("POLYGON_LOG_RANGE", "10000")))
+    iso = lambda s: int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
     for eid in election_ids or ELECTIONS:
         for slug in ELECTIONS[eid]["polymarket_events"]:
             markets = [m for m in get_json(f"{GAMMA}/events", {"slug": slug})[0]["markets"] if m.get("marketMakerAddress")]
             if not markets:
                 continue
-            iso = lambda s: int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
-            start = rpc.block_at(min(iso(m["createdAt"]) for m in markets))
-            end = rpc.block_at(max(iso(m["endDate"]) for m in markets))
-            if os.environ.get("LEGACY_DEBUG"):
-                probe(rpc, markets[0]["marketMakerAddress"].lower(), start, end)
-                return
-            by_transfers = "alchemy.com" in url  # Alchemy gratuit : eth_getLogs limité, transferts illimités
-            if not by_transfers:
+            t_start, t_end = min(iso(m["createdAt"]) for m in markets), max(iso(m["endDate"]) for m in markets)
+            start, end = rpc.block_at(t_start), rpc.block_at(t_end)
+            marks = rpc.marks(start, end)
+            if method == "logs":
                 logs = rpc.logs([m["marketMakerAddress"].lower() for m in markets], start, end)
-                when = rpc.clock(start, end)
             for m in markets:
-                if by_transfers:
-                    yes_id, no_id = (int(t) for t in json.loads(m["clobTokenIds"]))
-                    series = replay_transfers(rpc, m["marketMakerAddress"].lower(), yes_id, no_id, start, end)
+                fpmm = m["marketMakerAddress"].lower()
+                if method == "logs":
+                    mine = [l for l in logs if l["address"].lower() == fpmm]
+                    series = [(int(_interpolate(marks, block, by_time=False)), p) for block, p in replay(mine)]
                 else:
-                    mine = [l for l in logs if l["address"].lower() == m["marketMakerAddress"].lower()]
-                    series = [(int(when(block)), p) for block, p in replay(mine)]
-                # Un point par heure : la dernière cote de l'heure, horodatée au début de l'heure.
+                    yes_id, no_id = (int(t) for t in json.loads(m["clobTokenIds"]))
+                    series = sample(rpc, marks, fpmm, yes_id, no_id, t_start, t_end)
+                # Un point par heure au plus : la dernière cote de l'heure, horodatée au début de l'heure.
                 hourly = {}
                 for ts, p in series:
                     hourly[ts // 3600 * 3600] = p
@@ -235,6 +182,5 @@ def collect(con, election_ids=None):
                     [(m["conditionId"], ts, round(p, 4)) for ts, p in sorted(hourly.items())],
                 )
                 con.commit()
-                print(f"[polymarket-legacy] {eid} {m.get('groupItemTitle') or m['question']}: "
-                      f"{len(series)} échanges, {len(hourly)} points horaires ; premières cotes "
-                      f"{[round(p, 3) for _, p in series[:6]]}")
+                print(f"[polymarket-legacy] {eid} {m.get('groupItemTitle') or m['question']} ({method}) : "
+                      f"{len(hourly)} points ; premières cotes {[round(p, 3) for _, p in series[:6]]}")
