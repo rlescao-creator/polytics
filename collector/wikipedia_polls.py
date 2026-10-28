@@ -3,6 +3,8 @@
 France (fr.wikipedia) : chaque ligne de tableau pointe vers la notice officielle de la Commission
 des sondages, ce qui permet ensuite de la relier à son commanditaire.
 États-Unis (en.wikipedia) : tableaux « National poll results », une colonne par candidat.
+Autres pays (en.wikipedia) : pages « Opinion polling for… » de formes variées ; une colonne est retenue
+quand son en-tête renvoie vers la page Wikipedia d'un candidat listé dans la configuration de l'élection.
 """
 import re
 import urllib.parse
@@ -222,20 +224,24 @@ def _parse_table(table, headings, page_url, election_year=None):
     return polls
 
 
-def _fieldwork_end_en(label):
-    """'October 30 – November 2, 2024' -> '2024-11-02' ; le jour seul reprend le dernier mois cité."""
-    year = re.search(r"\b(20\d\d)\b", label)
-    tokens = re.findall(r"([A-Za-z]{3,})\.?\s*(\d{1,2})?|\b(\d{1,2})\b(?!\d)", label.replace(year.group(1), "") if year else label)
+def _fieldwork_end_en(label, default_year=None):
+    """'October 30 – November 2, 2024' -> '2024-11-02' ; le jour seul reprend le dernier mois cité.
+
+    Sans année dans la case ('10–13 Aug'), on prend default_year (celle du titre de section).
+    """
+    years = re.findall(r"\b(20\d\d)\b", label)  # '31 December 2023–1 January 2024' : la dernière compte
+    tokens = re.findall(r"([A-Za-z]{3,})\.?\s*(\d{1,2})?|\b(\d{1,2})\b(?!\d)", re.sub(r"\b20\d\d\b", "", label))
     month = day = None
     for word, d, lone in tokens:
         if word and word[:3].lower() in MONTHS_EN:
             month, day = MONTHS_EN[word[:3].lower()], int(d) if d else day
         elif lone:
             day = int(lone)
-    if not (year and month and day):
+    y = int(years[-1]) if years else default_year
+    if not (y and month and day):
         return None
     try:
-        return date(int(year.group(1)), month, day).isoformat()
+        return date(y, month, day).isoformat()
     except ValueError:
         return None
 
@@ -292,6 +298,93 @@ def _parse_table_en(table, headings, page_url):
     return polls
 
 
+# Sections hors intentions de vote présidentielles : moyennes, législatives, primaires, résultats…
+SKIP_SECTION = re.compile(r"aggregat|average|graphical|issue polling|parliament|senate|chamber|^(presidential )?primaries|by political party"
+                          r"|by alliance|coalition|approval|leadership|preferred|endorse|debate|^results|by department", re.I)
+SECOND_ROUND = re.compile(r"second round|run-?off|ballotage|\bvs?\.? ", re.I)
+NOT_A_POLL = re.compile(r"election|result|^(first|second) round$", re.I)
+
+
+def _article(title):
+    """'Kim Moon-soo (politician)' -> 'Kim Moon-soo'."""
+    return re.sub(r"\s*\(.*?\)$", "", title or "").strip()
+
+
+def _parse_table_intl(table, headings, page_url, election):
+    """Tableau de sondages d'un autre pays (election : sa configuration, avec "candidates")."""
+    candidates, two_rounds = election["candidates"], bool(election["second_round_date"])
+    election_year = int(election["election_date"][:4])
+    rows = table.find_all("tr")
+    grid = _grid(rows)
+    # En-tête : lignes du haut sans chiffres (noms, partis, photos, bandeaux de couleur).
+    header_rows = 0
+    while header_rows < len(rows) and not any(c.name == "td" and NUMBER.search(_text(c)) for c in rows[header_rows].find_all(["th", "td"], recursive=False)):
+        header_rows += 1
+    if not header_rows or header_rows == len(rows):
+        return []
+    ncols = max(len(r) for r in grid[:header_rows])
+    col_cells = [list(dict.fromkeys(r[c] for r in grid[:header_rows] if c < len(r))) for c in range(ncols)]
+    labels = [" ".join(_text(cell) for cell in cells).lower() for cells in col_cells]
+    inst = [i for i, n in enumerate(labels) if re.search(r"poll|firm|company", n) and not re.search(r"period|date|aggregat|average", n)]
+    dates = [i for i, n in enumerate(labels) if re.search(r"date|period|administer", n)]
+    if not inst or not dates:
+        return []
+    c_inst, c_date = inst[0], dates[0]
+    c_sample = next((i for i, n in enumerate(labels) if n.startswith("sample size") or n == "sample"), None)
+    by_article = {_article(t).lower(): name for name, t in candidates.items()}
+    cands = {}
+    for i, cells in enumerate(col_cells):
+        if i in (c_inst, c_date, c_sample):
+            continue
+        titles = [_article(a.get("title")).lower() for cell in cells for a in cell.find_all("a") if a.get("title")]
+        name = next((by_article[t] for t in titles if t in by_article), None)
+        if name is None and not any(t in by_article for t in titles):
+            # Pas de lien vers un candidat suivi : on tente le nom court dans le texte de l'en-tête.
+            name = next((n for n in candidates if re.search(rf"(^|\s){re.escape(n.lower())}(\s|$)", labels[i])), None)
+        if name and name not in cands.values():
+            cands[i] = name
+    if len(cands) < 2:
+        return []
+    section = " > ".join(h for _, h in headings)
+    duel = any(SECOND_ROUND.search(h + " ") for _, h in headings)
+    if duel and not two_rounds:
+        return []  # duels hypothétiques d'un scrutin à un tour : pas comparables aux sondages à plusieurs candidats
+    round_ = 2 if duel else 1
+    vote_day = election["second_round_date"] if duel else election["election_date"]
+    heading_year = next((int(y) for _, h in reversed(headings) for y in re.findall(r"\b(20\d\d)\b", h)), election_year)
+    polls, seen = [], {}
+    for r in grid[header_rows:]:
+        if len(r) <= max(list(cands) + [c_inst, c_date]):
+            continue
+        institute, label = _text(r[c_inst]), _text(r[c_date])
+        if not institute or r[c_inst].name == "th" or NOT_A_POLL.search(institute) or NOT_A_POLL.search(label):
+            continue
+        results = []
+        for i, name in cands.items():
+            if r[i] is r[c_inst] or r[i] is r[c_date]:
+                break  # ligne de note fusionnée sur toute la largeur
+            m = NUMBER.search(_text(r[i]))
+            if m:
+                results.append((name, float(m.group(0).replace(",", ".")), None))
+        if len(results) < 2:
+            continue
+        sample = None
+        if c_sample is not None:
+            digits = re.sub(r"\D", "", _text(r[c_sample]).split("(")[0])
+            sample = int(digits) if digits else None
+        end = _fieldwork_end_en(label, heading_year)
+        if end and end >= vote_day:
+            continue  # sondages sortie des urnes et enquêtes faites après le vote
+        key = id(r[c_inst])
+        seen[key] = seen.get(key, 0) + 1
+        polls.append({
+            "round": round_, "section": section, "institute": institute, "notice_url": None,
+            "fieldwork_label": label, "fieldwork_end": end,
+            "sample_size": sample, "scenario": seen[key], "source": page_url, "results": results,
+        })
+    return polls
+
+
 def collect(con, election_ids=None):
     for eid in election_ids or ELECTIONS:
         wiki = ELECTIONS[eid]["wikipedia"]
@@ -312,6 +405,10 @@ def collect(con, election_ids=None):
                 level = int(el.name[1])
                 headings = [h for h in headings if h[0] < level] + [(level, _text(el))]
             elif "wikitable" in (el.get("class") or []) and not el.find_parent("table"):
+                if "candidates" in ELECTIONS[eid]:
+                    if not any(SKIP_SECTION.search(h) for _, h in headings):
+                        polls += _parse_table_intl(el, headings, page_url, ELECTIONS[eid])
+                    continue
                 if lang == "en":
                     # Sondages nationaux réels ; pas les moyennes d'agrégateurs ni les duels hypothétiques.
                     if headings and headings[0][1].lower().startswith("national poll results"):
