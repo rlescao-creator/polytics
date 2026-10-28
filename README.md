@@ -94,6 +94,8 @@ d'Actions gratuites par mois ; un passage dure environ une minute.
 
 ### Appli web : Vercel
 
+En ligne : https://polytics-web.vercel.app (projet Vercel avec **Root Directory** = `web`, preset **Other**).
+
 `vercel.json` publie le dossier `web/` tel quel, sans compilation.
 
 1. Sur vercel.com : **Add New > Project**, importer le dépôt, garder les réglages proposés, **Deploy**.
