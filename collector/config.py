@@ -5,6 +5,7 @@ ELECTIONS = {
         "name": "Élection présidentielle française 2027",
         "country": "FR",
         "election_date": None,  # date du 1er tour pas encore fixée par décret
+        "second_round_date": None,
         "polymarket_events": ["next-french-presidential-election"],
         "wikipedia": ("fr", "Liste de sondages sur l'élection présidentielle française de 2027"),
     },
@@ -12,6 +13,7 @@ ELECTIONS = {
         "name": "Élection présidentielle française 2022",
         "country": "FR",
         "election_date": "2022-04-10",
+        "second_round_date": "2022-04-24",
         # Marché de l'ancien système Polymarket (AMM) : pas d'historique via l'API.
         "polymarket_events": ["who-will-win-the-2022-french-presidential-election"],
         "wikipedia": ("fr", "Liste de sondages sur l'élection présidentielle française de 2022"),
@@ -20,6 +22,7 @@ ELECTIONS = {
         "name": "US Presidential Election 2024",
         "country": "US",
         "election_date": "2024-11-05",
+        "second_round_date": None,  # scrutin à un tour
         "polymarket_events": ["presidential-election-winner-2024"],
         "wikipedia": None,  # sondages US : pas de Commission des sondages, à brancher plus tard
     },

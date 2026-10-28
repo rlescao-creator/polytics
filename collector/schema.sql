@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS elections (
   id            TEXT PRIMARY KEY,           -- ex. 'fr-2027', 'us-2024'
   name          TEXT NOT NULL,
   country       TEXT NOT NULL,
-  election_date TEXT                        -- ISO, NULL si pas encore fixée
+  election_date TEXT,                       -- ISO, NULL si pas encore fixée
+  second_round_date TEXT                    -- ISO, NULL sans second tour
 );
 
 -- Un marché Polymarket = "Will <candidat> win ?" (outcome Yes/No).

@@ -44,6 +44,10 @@ class Sqlite:
         self.con.row_factory = sqlite3.Row
         self.con.execute("PRAGMA foreign_keys = ON")
         self.con.executescript(SCHEMA.read_text())
+        try:  # bases créées avant l'ajout de la colonne
+            self.con.execute("ALTER TABLE elections ADD COLUMN second_round_date TEXT")
+        except sqlite3.OperationalError:
+            pass
 
     def execute(self, sql, params=()):
         return self.con.execute(sql, params)
@@ -60,10 +64,10 @@ def connect(target):
     con = Postgres(target) if target.startswith(("postgres://", "postgresql://")) else Sqlite(target)
     for eid, e in ELECTIONS.items():
         con.execute(
-            "INSERT INTO elections (id, name, country, election_date) VALUES (?, ?, ?, ?) "
+            "INSERT INTO elections (id, name, country, election_date, second_round_date) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT (id) DO UPDATE SET name = excluded.name, country = excluded.country, "
-            "election_date = excluded.election_date",
-            (eid, e["name"], e["country"], e["election_date"]),
+            "election_date = excluded.election_date, second_round_date = excluded.second_round_date",
+            (eid, e["name"], e["country"], e["election_date"], e["second_round_date"]),
         )
     for eid, res in RESULTS.items():
         for rnd in (1, 2):

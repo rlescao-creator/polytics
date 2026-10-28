@@ -19,6 +19,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from urllib.parse import urlparse
 
 from .config import ELECTIONS
 from .http import get_json
@@ -90,19 +91,34 @@ class Rpc:
             a = b + 1
         return out
 
-    def balances(self, holder, token_ids, block):
+    def balances(self, holder, token_ids, block, fallback=True):
         """Soldes ERC-1155 de `holder` au bloc donné (lecture d'état passé, accès archive)."""
         word = lambda n: format(n, "064x")
         n = len(token_ids)
         data = (BALANCE_OF_BATCH + word(0x40) + word(0x40 + 0x20 * (n + 1)) + word(n)
                 + "".join(word(int(holder, 16)) for _ in token_ids) + word(n) + "".join(word(t) for t in token_ids))
         raw = self.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
-        if self.fallback and (not raw or not int(raw[128:] or "0", 16)):
+        if fallback and self.fallback and (not raw or not int(raw[128:] or "0", 16)):
             # Certaines offres gratuites répondent « 0x », ou des soldes tous nuls, sur des blocs anciens
             # qu'elles n'ont pas en archive : on redemande à l'accès de repli.
             raw = self.fallback.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
         words = [int(raw[i:i + 64], 16) for i in range(0, len(raw), 64)]
         return words[2:2 + n] if len(words) >= 2 + n else None  # offset, longueur, puis les soldes
+
+
+def _archive(rpc, fpmm, token_ids, start, end):
+    """Accès qui sert vraiment l'historique, sinon son repli. Certaines offres gratuites répondent
+    l'état actuel quel que soit le bloc demandé : mêmes soldes au premier et au dernier tiers du marché."""
+    try:
+        a, b = (rpc.balances(fpmm, token_ids, start + (end - start) * k // 3, fallback=False) for k in (1, 2))
+    except RuntimeError:
+        a = b = None
+    if rpc.fallback and (not a or a == b):
+        # Le nom d'hôte seul : le chemin de l'adresse contient souvent la clé d'accès.
+        print(f"[polymarket-legacy] {urlparse(rpc.url).hostname} ne sert pas l'historique : "
+              f"repli sur {urlparse(rpc.fallback.url).hostname}")
+        return rpc.fallback
+    return rpc
 
 
 def _interpolate(marks, x, by_time):
@@ -151,6 +167,8 @@ def sample(rpc, marks, fpmm, yes_id, no_id, t_start, t_end):
             missing += 1
             continue
         yes, no = found
+        if not out and yes == no:
+            continue  # réserves égales de la création au premier échange : pas encore une cote
         if yes > 0 and no > 0:
             out.append((ts, no / (yes + no)))
     if missing:
@@ -174,6 +192,9 @@ def collect(con, election_ids=None):
             t_start, t_end = min(iso(m["createdAt"]) for m in markets), max(iso(m["endDate"]) for m in markets)
             start, end = rpc.block_at(t_start), rpc.block_at(t_end)
             marks = rpc.marks(start, end)
+            reader = rpc if method == "logs" else _archive(
+                rpc, markets[0]["marketMakerAddress"].lower(), [int(t) for t in json.loads(markets[0]["clobTokenIds"])],
+                start, end)
             if method == "logs":
                 logs = rpc.logs([m["marketMakerAddress"].lower() for m in markets], start, end)
             for m in markets:
@@ -183,7 +204,7 @@ def collect(con, election_ids=None):
                     series = [(int(_interpolate(marks, block, by_time=False)), p) for block, p in replay(mine)]
                 else:
                     yes_id, no_id = (int(t) for t in json.loads(m["clobTokenIds"]))
-                    series = sample(rpc, marks, fpmm, yes_id, no_id, t_start, t_end)
+                    series = sample(reader, marks, fpmm, yes_id, no_id, t_start, t_end)
                 # Un point par heure au plus : la dernière cote de l'heure, horodatée au début de l'heure.
                 hourly = {}
                 for ts, p in series:
