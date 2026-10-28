@@ -9,7 +9,9 @@ SQLite locale (`data/polls.db`) :
 | Wikipedia (liste des sondages) | chiffres par candidat, institut, dates de terrain, échantillon, scénario, lien vers la notice | `collector/wikipedia_polls.py` |
 | Commission des sondages (notices PDF) | commanditaire(s) normalisés (BFMTV, LCI, RTL…), date de première publication | `collector/notices.py` |
 
-Les élections suivies sont dans `collector/config.py` (`fr-2027`, `fr-2022`, `us-2024`), avec les
+Les élections suivies sont dans `collector/config.py` : `fr-2027` en direct, et en rétrospective `fr-2022`,
+`us-2024` et onze autres présidentielles depuis 2023 (Argentine, Mexique, Taïwan, Roumanie, Pologne,
+Corée du Sud, Chili, Portugal, Pérou, Colombie, Brésil). Elles viennent avec les
 résultats officiels des élections passées (`RESULTS`, chargés dans la table `results`) pour mesurer
 l'erreur des sondages.
 
@@ -48,7 +50,12 @@ JOIN markets USING (condition_id) WHERE candidate = 'Marine Le Pen' ORDER BY ts;
 - Commanditaire : lu dans la notice quand le format le permet, sinon déduit du nom de fichier
   (`notices.sponsor_source` indique lequel). Un commanditaire non listé dans `config.MEDIA` est ignoré.
 - Les chiffres viennent de Wikipedia (licence CC BY-SA : citer la source en cas de republication).
-- US 2024 : seulement Polymarket pour l'instant (pas d'équivalent de la Commission des sondages).
+- Hors France : pas d'équivalent de la Commission des sondages, donc pas de commanditaire. Les sondages
+  viennent des pages « Opinion polling for… » de la Wikipedia anglaise ; une colonne est lue quand son
+  en-tête renvoie vers la page d'un candidat listé dans `candidates` (config). Seul le tour décisif est
+  chargé dans `results`.
+- Trouver le slug Polymarket d'une élection : lancer le workflow avec `recherche_polymarket`
+  (ex. `--query chile+presidential` ou `--query slug:brazil-presidential-election`).
 
 ## Base de données (Supabase)
 
@@ -59,7 +66,7 @@ Migrations dans `supabase/migrations/`, à appliquer dans l'ordre.
 | 11 tables, 12 clés étrangères | `elections`, `polls` → `poll_results`, `notices` → `notice_sponsors`, `markets` → `market_prices`, `results`, `parties` → `candidates`, `favorites` → `auth.users` |
 | RLS sur toutes les tables | lecture publique des données ; `favorites` : chaque utilisateur ne voit et ne modifie que ses lignes |
 | Triggers | `ensure_candidate` (nom inconnu → fiche candidat), `polls_normalize_institute` (un nom par institut), `markets_link_candidate` (marché Polymarket → fiche candidat) |
-| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (France 2022, US 2024), `mes_favoris` |
+| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (toutes les élections passées), `mes_favoris` |
 | Vue | `v_poll_sponsors` (sondages avec leurs commanditaires) |
 
 Aucun nom de candidat ni couleur n'est écrit dans le tableau de bord : les noms viennent des sondages,
