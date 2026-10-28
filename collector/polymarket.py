@@ -18,8 +18,13 @@ def search(queries):
     for q in queries:
         q = q.replace("+", " ")  # « south+korea » : pas d'espaces à protéger dans les arguments du workflow
         for status in ("active", "closed"):
-            res = get_json(f"{GAMMA}/public-search", {"q": q, "events_status": status, "limit_per_type": 20})
-            for e in res.get("events") or []:
+            if q.startswith("slug:"):  # vérifie qu'un slug existe
+                events = get_json(f"{GAMMA}/events", {"slug": q[5:]}) if status == "closed" else []
+                if status == "closed" and not events:
+                    print(f"[{q}] introuvable")
+            else:
+                events = get_json(f"{GAMMA}/public-search", {"q": q, "events_status": status, "limit_per_type": 20}).get("events") or []
+            for e in events:
                 print(f"[{q}] {status:6} {e.get('slug')} | {e.get('title')} | fin {str(e.get('endDate'))[:10]} "
                       f"| volume {float(e.get('volume') or 0):,.0f}")
 
