@@ -19,6 +19,7 @@ from .config import ELECTIONS
 from .http import get_json
 
 GAMMA = "https://gamma-api.polymarket.com"
+CTF = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"  # contrat Conditional Tokens de Polymarket sur Polygon
 
 # keccak256 des signatures d'événements du contrat FixedProductMarketMaker (Gnosis).
 BUY = "0x4f62630f51608fc8a7603a9391a5101e58bd7c276139366fc107dc3b67c3dcf8"      # FPMMBuy(address,uint256,uint256,uint256,uint256)
@@ -42,6 +43,10 @@ class Rpc:
                 if "error" in data:
                     raise RuntimeError(f"{method} : {data['error']}")
                 return data["result"]
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == retries - 1:
+                    # Le fournisseur explique son refus dans le corps de la réponse (limite de plage, quota…).
+                    raise RuntimeError(f"{method} : HTTP {e.code} {e.read()[:300]!r}") from None
             except (urllib.error.URLError, TimeoutError):
                 if attempt == retries - 1:
                     raise
@@ -79,6 +84,25 @@ class Rpc:
             return known[-1][1]
         return at
 
+    def transfers(self, start, end, **direction):
+        """Transferts ERC-1155 (parts Oui/Non) vers ou depuis une adresse, via alchemy_getAssetTransfers.
+
+        Fonction propre à Alchemy, disponible en offre gratuite : 1 000 transferts par page, sans
+        limite de plage de blocs (contrairement à eth_getLogs), avec l'heure de chaque bloc.
+        """
+        out, page = [], None
+        while True:
+            params = {"fromBlock": hex(start), "toBlock": hex(end), "contractAddresses": [CTF],
+                      "category": ["erc1155"], "withMetadata": True, "excludeZeroValue": False,
+                      "maxCount": hex(1000), "order": "asc", **direction}
+            if page:
+                params["pageKey"] = page
+            res = self.call("alchemy_getAssetTransfers", [params])
+            out += res["transfers"]
+            page = res.get("pageKey")
+            if not page:
+                return out
+
     def logs(self, addresses, start, end):
         out, a = [], start
         while a <= end:
@@ -87,6 +111,35 @@ class Rpc:
                                               "topics": [[BUY, SELL, ADDED, REMOVED]]}])
             a = b + 1
         return out
+
+
+def replay_transfers(rpc, fpmm, yes_id, no_id, start, end):
+    """Cote après chaque transaction, à partir des parts Oui/Non entrées et sorties de l'automate.
+
+    Les réserves de l'automate sont ses soldes de parts Oui et Non ; P(Oui) = Non / (Oui + Non).
+    Renvoie [(horodatage, P(Oui))].
+    """
+    moves = {}
+    for sign, direction in ((1, {"toAddress": fpmm}), (-1, {"fromAddress": fpmm})):
+        for t in rpc.transfers(start, end, **direction):
+            log_index = int(t["uniqueId"].rsplit(":", 1)[-1], 0)
+            key = (int(t["blockNum"], 16), t["hash"])
+            when = int(datetime.fromisoformat(t["metadata"]["blockTimestamp"].replace("Z", "+00:00")).timestamp())
+            entry = moves.setdefault(key, {"order": log_index, "ts": when, "yes": 0, "no": 0})
+            entry["order"] = min(entry["order"], log_index)
+            for meta in t.get("erc1155Metadata") or []:
+                token, value = int(meta["tokenId"], 16), int(meta["value"], 16)
+                if token == yes_id:
+                    entry["yes"] += sign * value
+                elif token == no_id:
+                    entry["no"] += sign * value
+    yes = no = 0
+    prices = []
+    for (block, _), e in sorted(moves.items(), key=lambda kv: (kv[0][0], kv[1]["order"])):
+        yes, no = yes + e["yes"], no + e["no"]
+        if yes > 0 and no > 0:
+            prices.append((e["ts"], no / (yes + no)))
+    return prices
 
 
 def _words(data):
@@ -129,15 +182,21 @@ def collect(con, election_ids=None):
             iso = lambda s: int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
             start = rpc.block_at(min(iso(m["createdAt"]) for m in markets))
             end = rpc.block_at(max(iso(m["endDate"]) for m in markets))
-            addrs = [m["marketMakerAddress"].lower() for m in markets]
-            logs = rpc.logs(addrs, start, end)
-            when = rpc.clock(start, end)
+            by_transfers = "alchemy.com" in url  # Alchemy gratuit : eth_getLogs limité, transferts illimités
+            if not by_transfers:
+                logs = rpc.logs([m["marketMakerAddress"].lower() for m in markets], start, end)
+                when = rpc.clock(start, end)
             for m in markets:
-                mine = [l for l in logs if l["address"].lower() == m["marketMakerAddress"].lower()]
+                if by_transfers:
+                    yes_id, no_id = (int(t) for t in json.loads(m["clobTokenIds"]))
+                    series = replay_transfers(rpc, m["marketMakerAddress"].lower(), yes_id, no_id, start, end)
+                else:
+                    mine = [l for l in logs if l["address"].lower() == m["marketMakerAddress"].lower()]
+                    series = [(int(when(block)), p) for block, p in replay(mine)]
                 # Un point par heure : la dernière cote de l'heure, horodatée au début de l'heure.
                 hourly = {}
-                for block, p in replay(mine):
-                    hourly[int(when(block)) // 3600 * 3600] = p
+                for ts, p in series:
+                    hourly[ts // 3600 * 3600] = p
                 con.executemany(
                     "INSERT INTO market_prices (condition_id, ts, price) VALUES (?, ?, ?) "
                     "ON CONFLICT (condition_id, ts) DO UPDATE SET price = excluded.price",
@@ -145,4 +204,5 @@ def collect(con, election_ids=None):
                 )
                 con.commit()
                 print(f"[polymarket-legacy] {eid} {m.get('groupItemTitle') or m['question']}: "
-                      f"{len(mine)} événements, {len(hourly)} points horaires")
+                      f"{len(series)} échanges, {len(hourly)} points horaires ; premières cotes "
+                      f"{[round(p, 3) for _, p in series[:6]]}")
