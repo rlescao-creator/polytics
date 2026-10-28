@@ -56,6 +56,11 @@ def collect(con, election_ids=None, min_volume=1000):
                 except OSError as e:
                     print(f"[polymarket] {m['question']}: historique non récupéré ({e})")
                     points = []
+                # Seuls les points depuis le dernier déjà en base partent : un aller-retour réseau par
+                # point rendrait chaque passage horaire très long. Le dernier est réécrit, il peut avoir bougé.
+                last = con.execute(
+                    "SELECT max(ts) AS ts FROM market_prices WHERE condition_id = ?", (m["conditionId"],)).fetchone()["ts"]
+                points = [p for p in points if last is None or p["t"] >= last]
                 con.executemany(
                     "INSERT INTO market_prices (condition_id, ts, price) VALUES (?, ?, ?) "
                     "ON CONFLICT (condition_id, ts) DO UPDATE SET price = excluded.price",
@@ -64,5 +69,5 @@ def collect(con, election_ids=None, min_volume=1000):
                 con.commit()
                 n_markets += 1
                 n_points += len(points)
-            print(f"[polymarket] {eid}: {n_markets} marchés, {n_points} points de cotes")
+            print(f"[polymarket] {eid}: {n_markets} marchés, {n_points} points de cotes écrits")
     return unreachable

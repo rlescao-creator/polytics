@@ -24,6 +24,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       COLLECT_POLLS: ${{ inputs.sondages && '1' || '0' }}
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
 
