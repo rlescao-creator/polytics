@@ -13,6 +13,16 @@ def _history(token_id, **params):
     return get_json(f"{CLOB}/prices-history", {"market": token_id, **params}).get("history", [])
 
 
+def search(queries):
+    """Affiche les événements Polymarket (ouverts et clos) qui répondent à chaque requête : sert à trouver les slugs."""
+    for q in queries:
+        for status in ("active", "closed"):
+            res = get_json(f"{GAMMA}/public-search", {"q": q, "events_status": status, "limit_per_type": 20})
+            for e in res.get("events") or []:
+                print(f"[{q}] {status:6} {e.get('slug')} | {e.get('title')} | fin {str(e.get('endDate'))[:10]} "
+                      f"| volume {float(e.get('volume') or 0):,.0f}")
+
+
 def collect(con, election_ids=None, min_volume=1000):
     """Renvoie le nombre d'événements Polymarket injoignables (0 si tout s'est bien passé)."""
     unreachable = 0

@@ -16,6 +16,10 @@ on:
         description: "Reconstruire les cotes des anciens marchés depuis Polygon (ex. --election fr-2022), au lieu de la collecte"
         type: string
         default: ""
+      recherche_polymarket:
+        description: "Lister les événements Polymarket répondant à ces requêtes (ex. --query argentina), sans rien écrire"
+        type: string
+        default: ""
 
 concurrency:
   group: collecte
@@ -47,7 +51,7 @@ jobs:
           fi
 
       - name: Collecter
-        if: ${{ !inputs.historique_polygon }}
+        if: ${{ !inputs.historique_polygon && !inputs.recherche_polymarket }}
         run: python -m collector scheduled
 
       - name: Reconstruire les anciennes cotes Polymarket
@@ -56,3 +60,9 @@ jobs:
           POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
           ARGS: ${{ inputs.historique_polygon }}
         run: python -m collector polymarket-legacy $ARGS --quiet
+
+      - name: Chercher des événements Polymarket
+        if: ${{ inputs.recherche_polymarket }}
+        env:
+          ARGS: ${{ inputs.recherche_polymarket }}
+        run: python -m collector polymarket-search $ARGS

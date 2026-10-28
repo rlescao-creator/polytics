@@ -95,16 +95,21 @@ def main():
     data_dir = Path(os.environ.get("COLLECTOR_DATA", ROOT / "data"))
     ap = argparse.ArgumentParser(prog="collector")
     ap.add_argument("command", nargs="?", default="all",
-                    choices=["all", "polymarket", "polls", "notices", "stats", "check", "scheduled", "polymarket-legacy"])
+                    choices=["all", "polymarket", "polls", "notices", "stats", "check", "scheduled", "polymarket-legacy", "polymarket-search"])
     ap.add_argument("--election", action="append", help="id d'élection (répétable), défaut : toutes")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL") or str(data_dir / "polls.db"),
                     help="fichier SQLite ou URL postgresql:// (défaut : $DATABASE_URL, sinon data/polls.db)")
     ap.add_argument("--refresh-notices", action="store_true", help="re-parser toutes les notices")
+    ap.add_argument("--query", action="append", help="texte recherché (polymarket-search, répétable)")
     ap.add_argument("--quiet", action="store_true", help="ne pas afficher les stats (cron)")
     args = ap.parse_args()
 
     if args.command == "check":
         sys.exit(0 if check.run() else 1)
+
+    if args.command == "polymarket-search":
+        polymarket.search(args.query or [])
+        return
 
     con = connect(args.db)
     if args.command == "scheduled":
