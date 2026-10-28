@@ -36,8 +36,9 @@ REMOVED = "0x8b4b2c8ebd04c47fc8bce136a85df9b93fcb1f47c8aa296457d4391519d190e7"  
 
 
 class Rpc:
-    def __init__(self, url, log_range):
+    def __init__(self, url, log_range, fallback=None):
         self.url, self.log_range, self._ts = url, log_range, {}
+        self.fallback = Rpc(fallback, log_range) if fallback and fallback != url else None
 
     def call(self, method, params, retries=5):
         body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
@@ -96,8 +97,11 @@ class Rpc:
         data = (BALANCE_OF_BATCH + word(0x40) + word(0x40 + 0x20 * (n + 1)) + word(n)
                 + "".join(word(int(holder, 16)) for _ in token_ids) + word(n) + "".join(word(t) for t in token_ids))
         raw = self.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
+        if not raw and self.fallback:
+            # Certaines offres gratuites répondent « 0x » sur des blocs anciens : on redemande ailleurs.
+            raw = self.fallback.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
         words = [int(raw[i:i + 64], 16) for i in range(0, len(raw), 64)]
-        return words[2:2 + n]  # offset, longueur, puis les soldes
+        return words[2:2 + n] if len(words) >= 2 + n else None  # offset, longueur, puis les soldes
 
 
 def _interpolate(marks, x, by_time):
@@ -138,12 +142,18 @@ def replay(logs):
 
 def sample(rpc, marks, fpmm, yes_id, no_id, t_start, t_end):
     """Méthode « state » : réserves Oui/Non de l'automate toutes les STEP secondes ; [(heure, P(Oui))]."""
-    out = []
+    out, missing = [], 0
     for ts in range(t_start // STEP * STEP + STEP, t_end, STEP):
         block = int(_interpolate(marks, ts, by_time=True))
-        yes, no = rpc.balances(fpmm, [yes_id, no_id], block)
+        found = rpc.balances(fpmm, [yes_id, no_id], block)
+        if found is None:
+            missing += 1
+            continue
+        yes, no = found
         if yes > 0 and no > 0:
             out.append((ts, no / (yes + no)))
+    if missing:
+        print(f"  {fpmm} : {missing} lectures sans réponse, ignorées")
     return out
 
 
@@ -152,7 +162,8 @@ def collect(con, election_ids=None):
     if not url:
         raise RuntimeError("POLYGON_RPC_URL manquant : accès Polygon avec historique (ex. Alchemy, compte gratuit).")
     method = os.environ.get("LEGACY_METHOD", "state")
-    rpc = Rpc(url, int(os.environ.get("POLYGON_LOG_RANGE", "10000")))
+    rpc = Rpc(url, int(os.environ.get("POLYGON_LOG_RANGE", "10000")),
+              fallback=os.environ.get("POLYGON_RPC_FALLBACK", "https://polygon.drpc.org"))
     iso = lambda s: int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
     for eid in election_ids or ELECTIONS:
         for slug in ELECTIONS[eid]["polymarket_events"]:
