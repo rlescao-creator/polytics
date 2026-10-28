@@ -1,7 +1,8 @@
 """Chiffres des sondages depuis les tableaux Wikipedia.
 
-Chaque ligne de tableau pointe vers la notice officielle de la Commission des sondages,
-ce qui permet ensuite de la relier à son commanditaire.
+France (fr.wikipedia) : chaque ligne de tableau pointe vers la notice officielle de la Commission
+des sondages, ce qui permet ensuite de la relier à son commanditaire.
+États-Unis (en.wikipedia) : tableaux « National poll results », une colonne par candidat.
 """
 import re
 import urllib.parse
@@ -18,6 +19,8 @@ MONTHS = {
     "nov": 11, "déc": 12, "dec": 12,
 }
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+MONTHS_EN = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 NOTICE_PATH = re.compile(r"/notices/(\d{4})/([a-zéû]+)/", re.I)
 
 
@@ -219,6 +222,76 @@ def _parse_table(table, headings, page_url, election_year=None):
     return polls
 
 
+def _fieldwork_end_en(label):
+    """'October 30 – November 2, 2024' -> '2024-11-02' ; le jour seul reprend le dernier mois cité."""
+    year = re.search(r"\b(20\d\d)\b", label)
+    tokens = re.findall(r"([A-Za-z]{3,})\.?\s*(\d{1,2})?|\b(\d{1,2})\b(?!\d)", label.replace(year.group(1), "") if year else label)
+    month = day = None
+    for word, d, lone in tokens:
+        if word and word[:3].lower() in MONTHS_EN:
+            month, day = MONTHS_EN[word[:3].lower()], int(d) if d else day
+        elif lone:
+            day = int(lone)
+    if not (year and month and day):
+        return None
+    try:
+        return date(int(year.group(1)), month, day).isoformat()
+    except ValueError:
+        return None
+
+
+def _surname(full):
+    """'Robert F. Kennedy Jr.' -> 'Kennedy' : le nom tel qu'il sert de clé candidat."""
+    words = [w for w in full.split() if w.strip(".,").lower() not in ("jr", "sr", "ii", "iii")]
+    return words[-1] if words else full
+
+
+def _parse_table_en(table, headings, page_url):
+    rows = table.find_all("tr")
+    grid = _grid(rows)
+    header = rows[0].find_all("th", recursive=False) if rows else []
+    lower = [_text(th).lower() for th in header]
+    try:
+        c_inst = next(i for i, n in enumerate(lower) if n.startswith("poll source"))
+        c_date = next(i for i, n in enumerate(lower) if n.startswith("date"))
+    except StopIteration:
+        return []
+    c_sample = next((i for i, n in enumerate(lower) if n.startswith("sample")), None)
+    # Colonnes candidat : l'en-tête commence par un lien vers la page de la personne.
+    cands = {}
+    for i, th in enumerate(header):
+        a = th.find("a")
+        if a and a.get("title") and i not in (c_inst, c_date, c_sample) and not lower[i].startswith(("others", "lead", "margin")):
+            cands[i] = _surname(a["title"])
+    if len(cands) < 2:
+        return []
+    section = " > ".join(h for _, h in headings)
+    polls, seen = [], {}
+    for r in grid[1:]:
+        if len(r) < len(header) or r[c_inst].name == "th":
+            continue
+        results = []
+        for i, name in cands.items():
+            m = NUMBER.search(_text(r[i]))
+            if m and r[i] is not r[c_inst]:
+                results.append((name, float(m.group(0).replace(",", ".")), None))
+        if len(results) < 2:
+            continue  # ligne d'événement (« X suspends his campaign ») fusionnée sur toute la largeur
+        label = _text(r[c_date])
+        sample = None
+        if c_sample is not None:
+            digits = re.sub(r"\D", "", _text(r[c_sample]).split("(")[0])
+            sample = int(digits) if digits else None
+        key = id(r[c_inst])
+        seen[key] = seen.get(key, 0) + 1
+        polls.append({
+            "round": 1, "section": section, "institute": _text(r[c_inst]), "notice_url": None,
+            "fieldwork_label": label, "fieldwork_end": _fieldwork_end_en(label),
+            "sample_size": sample, "scenario": seen[key], "source": page_url, "results": results,
+        })
+    return polls
+
+
 def collect(con, election_ids=None):
     for eid in election_ids or ELECTIONS:
         wiki = ELECTIONS[eid]["wikipedia"]
@@ -230,7 +303,7 @@ def collect(con, election_ids=None):
         api = f"https://{lang}.wikipedia.org/w/api.php"
         page_url = f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
         data = get_json(api, {"action": "parse", "page": title, "prop": "text",
-                              "format": "json", "formatversion": 2})
+                              "format": "json", "formatversion": 2, "redirects": 1})
         soup = BeautifulSoup(data["parse"]["text"], "html.parser")
 
         polls, headings = [], []
@@ -239,6 +312,11 @@ def collect(con, election_ids=None):
                 level = int(el.name[1])
                 headings = [h for h in headings if h[0] < level] + [(level, _text(el))]
             elif "wikitable" in (el.get("class") or []) and not el.find_parent("table"):
+                if lang == "en":
+                    # Sondages nationaux réels ; pas les moyennes d'agrégateurs ni les duels hypothétiques.
+                    if headings and headings[0][1].lower().startswith("national poll results"):
+                        polls += _parse_table_en(el, headings, page_url)
+                    continue
                 # Seules les sections d'intentions de vote par tour ; pas les tableaux par âge, CSP, etc.
                 if not any(" tour" in h.lower() for _, h in headings):
                     continue

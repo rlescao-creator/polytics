@@ -24,11 +24,12 @@ ELECTIONS = {
         "election_date": "2024-11-05",
         "second_round_date": None,  # scrutin à un tour
         "polymarket_events": ["presidential-election-winner-2024"],
-        "wikipedia": None,  # sondages US : pas de Commission des sondages, à brancher plus tard
+        # Sondages nationaux (vote populaire). Pas de Commission des sondages : pas de commanditaire.
+        "wikipedia": ("en", "Nationwide opinion polling for the 2024 United States presidential election"),
     },
 }
 
-# Résultats officiels (% des exprimés), source : Conseil constitutionnel via Wikipedia.
+# Résultats officiels (% des exprimés), source : Conseil constitutionnel (France), FEC (États-Unis) via Wikipedia.
 RESULTS = {
     "fr-2022": {
         "source": "https://fr.wikipedia.org/wiki/%C3%89lection_pr%C3%A9sidentielle_fran%C3%A7aise_de_2022",
@@ -36,6 +37,11 @@ RESULTS = {
             "Jadot": 4.63, "Lassalle": 3.13, "Roussel": 2.28, "Dupont-Aignan": 2.06, "Hidalgo": 1.74,
             "Poutou": 0.76, "Arthaud": 0.56},
         2: {"Macron": 58.55, "Le Pen": 41.45},
+    },
+    # Vote populaire national ; le vainqueur se décide au collège électoral (Trump, 312 grands électeurs).
+    "us-2024": {
+        "source": "https://en.wikipedia.org/wiki/2024_United_States_presidential_election",
+        1: {"Trump": 49.80, "Harris": 48.32},
     },
 }
 
