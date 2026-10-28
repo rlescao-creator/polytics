@@ -1,0 +1,13 @@
+# /etc/cron.d/poll-collector — horaires en UTC.
+# La base est Supabase : DATABASE_URL est lu dans $COLLECTOR_ENV (fichier lisible par root et collector seulement).
+# flock sérialise les jobs pour qu'ils ne tournent jamais en même temps.
+SHELL=/bin/bash
+COLLECTOR_ENV=/etc/poll-collector.env
+COLLECTOR_DATA=/var/lib/poll-collector
+APP=/opt/poll-collector
+
+# Cotes Polymarket : toutes les heures à hh:05
+5 * * * *   collector  cd $APP && flock -w 900 $COLLECTOR_DATA/.lock .venv/bin/python -m collector polymarket --quiet >> $COLLECTOR_DATA/logs/polymarket.log 2>&1
+
+# Sondages Wikipedia puis nouvelles notices : chaque jour à 06:30
+30 6 * * *  collector  cd $APP && flock -w 900 $COLLECTOR_DATA/.lock .venv/bin/python -m collector polls --quiet >> $COLLECTOR_DATA/logs/polls.log 2>&1 && flock -w 900 $COLLECTOR_DATA/.lock .venv/bin/python -m collector notices --quiet >> $COLLECTOR_DATA/logs/polls.log 2>&1
