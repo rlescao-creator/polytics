@@ -180,6 +180,24 @@ def replay(logs):
     return prices
 
 
+def probe(rpc, fpmm, start, end):
+    """Diagnostic : ce que l'accès Polygon accepte pour cet automate (types de transferts, plages de logs)."""
+    for cat in (["external"], ["erc20"], ["erc1155"]):
+        for direction in ({"toAddress": fpmm}, {"fromAddress": fpmm}):
+            try:
+                res = rpc.call("alchemy_getAssetTransfers", [{"fromBlock": hex(start), "toBlock": hex(end), "category": cat,
+                                                              "maxCount": hex(5), **direction}])
+                print(f"  [diagnostic] transferts {cat[0]} {list(direction)[0]} : {len(res['transfers'])} (5 max)")
+            except Exception as e:
+                print(f"  [diagnostic] transferts {cat[0]} {list(direction)[0]} : refus {e}")
+    for size in (10, 500, 2000, 10000):
+        try:
+            res = rpc.call("eth_getLogs", [{"address": fpmm, "fromBlock": hex(23646250), "toBlock": hex(23646250 + size - 1)}])
+            print(f"  [diagnostic] eth_getLogs {size} blocs : {len(res)} événements")
+        except Exception as e:
+            print(f"  [diagnostic] eth_getLogs {size} blocs : refus {str(e)[:250]}")
+
+
 def collect(con, election_ids=None):
     url = os.environ.get("POLYGON_RPC_URL")
     if not url:
@@ -193,6 +211,9 @@ def collect(con, election_ids=None):
             iso = lambda s: int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
             start = rpc.block_at(min(iso(m["createdAt"]) for m in markets))
             end = rpc.block_at(max(iso(m["endDate"]) for m in markets))
+            if os.environ.get("LEGACY_DEBUG"):
+                probe(rpc, markets[0]["marketMakerAddress"].lower(), start, end)
+                return
             by_transfers = "alchemy.com" in url  # Alchemy gratuit : eth_getLogs limité, transferts illimités
             if not by_transfers:
                 logs = rpc.logs([m["marketMakerAddress"].lower() for m in markets], start, end)
