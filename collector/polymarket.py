@@ -16,6 +16,7 @@ def _history(token_id, **params):
 def search(queries):
     """Affiche les événements Polymarket (ouverts et clos) qui répondent à chaque requête : sert à trouver les slugs."""
     for q in queries:
+        q = q.replace("+", " ")  # « south+korea » : pas d'espaces à protéger dans les arguments du workflow
         for status in ("active", "closed"):
             res = get_json(f"{GAMMA}/public-search", {"q": q, "events_status": status, "limit_per_type": 20})
             for e in res.get("events") or []:
