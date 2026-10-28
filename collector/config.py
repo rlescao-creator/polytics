@@ -70,9 +70,7 @@ ELECTIONS = {
     "kr-2025": {
         "name": "Élection présidentielle sud-coréenne 2025", "country": "KR",
         "election_date": "2025-06-03", "second_round_date": None,
-        # Pas d'événement « vainqueur » trouvé par la recherche : on essaie les slugs plausibles.
-        "polymarket_events": ["next-president-of-south-korea", "south-korea-presidential-election-2025",
-                              "south-korean-presidential-election-winner"],
+        "polymarket_events": ["next-president-of-south-korea"],
         "wikipedia": ("en", "Opinion polling for the 2025 South Korean presidential election"),
         "candidates": {"Lee Jae-myung": "Lee Jae-myung", "Kim Moon-soo": "Kim Moon-soo", "Lee Jun-seok": "Lee Jun-seok"},
     },

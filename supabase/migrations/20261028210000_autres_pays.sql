@@ -34,18 +34,20 @@ LANGUAGE sql IMMUTABLE SET search_path = public, extensions AS $$
   SELECT regexp_replace(lower(unaccent(raw)), '[^a-z]', '', 'g')
 $$;
 
--- Un marché est relié au candidat dont le nom complet ou court s'écrit pareil ; à défaut, pour les
--- candidats de la même élection, au nom court en fin ou début d'intitulé ('Lula' pour 'Lula da Silva').
+-- Un marché est relié au candidat dont le nom complet ou court s'écrit pareil, parti entre parenthèses
+-- ôté ('André Ventura (CH)') ; à défaut, pour les finalistes de la même élection, au nom court présent
+-- comme mot de l'intitulé ('Iván Cepeda Castro' -> 'Cepeda').
 CREATE OR REPLACE FUNCTION markets_link_candidate() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public, extensions AS $$
+DECLARE
+  bare text := regexp_replace(NEW.candidate, '\s*\(.*\)\s*$', '');
 BEGIN
   NEW.candidate_name := coalesce(
     (SELECT name FROM candidates
-     WHERE name_key(full_name) = name_key(NEW.candidate) OR name_key(name) = name_key(NEW.candidate)
+     WHERE name_key(full_name) = name_key(bare) OR name_key(name) = name_key(bare)
      ORDER BY full_name IS NULL LIMIT 1),
     (SELECT c.name FROM candidates c JOIN results r ON r.candidate = c.name AND r.election_id = NEW.election_id
-     WHERE unaccent(lower(NEW.candidate)) LIKE '% ' || unaccent(lower(c.name))
-        OR unaccent(lower(NEW.candidate)) LIKE unaccent(lower(c.name)) || ' %'
+     WHERE ' ' || unaccent(lower(bare)) || ' ' LIKE '% ' || unaccent(lower(c.name)) || ' %'
      LIMIT 1));
   RETURN NEW;
 END $$;
