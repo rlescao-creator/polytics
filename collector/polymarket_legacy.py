@@ -92,9 +92,11 @@ class Rpc:
         """
         out, page = [], None
         while True:
-            params = {"fromBlock": hex(start), "toBlock": hex(end), "contractAddresses": [CTF],
-                      "category": ["erc1155"], "withMetadata": True, "excludeZeroValue": False,
+            params = {"fromBlock": hex(start), "toBlock": hex(end), "category": ["erc1155"],
+                      "withMetadata": True, "excludeZeroValue": False,
                       "maxCount": hex(1000), "order": "asc", **direction}
+            if not os.environ.get("LEGACY_DEBUG"):
+                params["contractAddresses"] = [CTF]
             if page:
                 params["pageKey"] = page
             res = self.call("alchemy_getAssetTransfers", [params])
@@ -121,7 +123,16 @@ def replay_transfers(rpc, fpmm, yes_id, no_id, start, end):
     """
     moves = {}
     for sign, direction in ((1, {"toAddress": fpmm}), (-1, {"fromAddress": fpmm})):
-        for t in rpc.transfers(start, end, **direction):
+        found = rpc.transfers(start, end, **direction)
+        if os.environ.get("LEGACY_DEBUG"):
+            tokens = {}
+            for t in found:
+                for meta in t.get("erc1155Metadata") or []:
+                    tokens[meta["tokenId"]] = tokens.get(meta["tokenId"], 0) + 1
+            print(f"  [diagnostic] {fpmm} {list(direction)[0]} : {len(found)} transferts, contrats "
+                  f"{sorted({t.get('rawContract', {}).get('address') for t in found})}, parts {tokens} ; "
+                  f"attendues Oui={hex(yes_id)} Non={hex(no_id)}")
+        for t in found:
             log_index = int(t["uniqueId"].rsplit(":", 1)[-1], 0)
             key = (int(t["blockNum"], 16), t["hash"])
             when = int(datetime.fromisoformat(t["metadata"]["blockTimestamp"].replace("Z", "+00:00")).timestamp())

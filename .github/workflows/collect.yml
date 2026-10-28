@@ -55,4 +55,5 @@ jobs:
         env:
           POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
           ARGS: ${{ inputs.historique_polygon }}
-        run: python -m collector polymarket-legacy $ARGS --quiet
+          LEGACY_DEBUG: ${{ contains(inputs.historique_polygon, 'diagnostic') && '1' || '' }}
+        run: python -m collector polymarket-legacy ${ARGS//diagnostic/} --quiet
