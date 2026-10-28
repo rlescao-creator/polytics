@@ -61,11 +61,12 @@ def stats(con):
 
 
 def scheduled(con, args, data_dir):
-    """Un passage de tâche planifiée (Railway, cron) : lancée chaque heure, elle se termine à chaque fois.
+    """Un passage de tâche planifiée (GitHub Actions, cron) : lancée chaque heure, elle se termine à chaque fois.
 
     Polymarket à chaque passage ; sondages et notices une fois par jour, à l'heure UTC
-    $POLLS_HOUR_UTC (6 par défaut). Une étape en échec n'empêche pas les suivantes, mais le code
-    de sortie le signale pour que la plateforme affiche l'échec.
+    $POLLS_HOUR_UTC (6 par défaut), ou à chaque passage si $COLLECT_POLLS vaut 1 (lancement manuel).
+    Une étape en échec n'empêche pas les suivantes, mais le code de sortie le signale pour que la
+    plateforme affiche l'échec.
     """
     hour = int(os.environ.get("POLLS_HOUR_UTC", "6"))
     def markets():
@@ -73,7 +74,7 @@ def scheduled(con, args, data_dir):
             raise RuntimeError("Polymarket injoignable")
 
     steps = [("polymarket", markets)]
-    if datetime.now(timezone.utc).hour == hour:
+    if datetime.now(timezone.utc).hour == hour or os.environ.get("COLLECT_POLLS") == "1":
         steps += [
             ("polls", lambda: wikipedia_polls.collect(con, args.election)),
             ("notices", lambda: notices.collect(con, data_dir / "notices")),

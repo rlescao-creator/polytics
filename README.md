@@ -43,7 +43,7 @@ JOIN markets USING (condition_id) WHERE candidate = 'Marine Le Pen' ORDER BY ts;
 
 - **Polymarket est bloqué par l'ANJ en France** : les FAI français redirigent le domaine vers une page de
   blocage, l'API est alors injoignable et le module l'indique sans planter. À faire tourner depuis un serveur
-  hors de France : sur Railway, voir [deploy/RAILWAY.md](deploy/RAILWAY.md) ; sur un serveur Linux, [deploy/DEPLOY.md](deploy/DEPLOY.md). `python -m collector check` teste l'accès aux sources.
+  hors de France : c'est le rôle de GitHub Actions (voir « Mise en ligne » ci-dessous) ; sur un serveur Linux, [deploy/DEPLOY.md](deploy/DEPLOY.md). `python -m collector check` teste l'accès aux sources.
 - France 2022 : marchés de l'ancien système Polymarket (AMM), pas d'historique via l'API.
 - Commanditaire : lu dans la notice quand le format le permet, sinon déduit du nom de fichier
   (`notices.sponsor_source` indique lequel). Un commanditaire non listé dans `config.MEDIA` est ignoré.
@@ -76,3 +76,26 @@ python3 -m http.server 8090 --directory web
 
 Puis ouvrir http://localhost:8090. Dans Supabase > Authentication > URL Configuration, mettre cette
 adresse (ou celle du site en ligne) comme **Site URL**, pour que le lien de confirmation par e-mail y ramène.
+
+## Mise en ligne
+
+### Collecteur : GitHub Actions
+
+`.github/workflows/collect.yml` lance `python -m collector scheduled` toutes les heures à hh:05 (UTC) :
+cotes Polymarket à chaque passage, sondages et notices une fois par jour à 6 h UTC. Les serveurs GitHub
+sont hors de France, donc Polymarket y est joignable.
+
+1. Dans le dépôt GitHub : **Settings > Secrets and variables > Actions > New repository secret**,
+   nom `DATABASE_URL`, valeur = Supabase > **Connect** > **Session pooler** (avec le mot de passe de la base).
+2. Onglet **Actions > Collecte > Run workflow** pour un premier passage (cocher « sondages » pour tout charger).
+
+GitHub peut décaler un passage planifié de quelques minutes. Un dépôt privé dispose de 2 000 minutes
+d'Actions gratuites par mois ; un passage dure environ une minute.
+
+### Appli web : Vercel
+
+`vercel.json` publie le dossier `web/` tel quel, sans compilation.
+
+1. Sur vercel.com : **Add New > Project**, importer le dépôt, garder les réglages proposés, **Deploy**.
+2. Dans Supabase > **Authentication > URL Configuration** : mettre l'adresse Vercel comme **Site URL**
+   (et garder `http://localhost:8090` dans **Redirect URLs** pour les tests en local).
