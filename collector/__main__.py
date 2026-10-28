@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
-from . import check, notices, polymarket, wikipedia_polls
+from . import check, notices, polymarket, polymarket_legacy, wikipedia_polls
 from .db import connect
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -95,7 +95,7 @@ def main():
     data_dir = Path(os.environ.get("COLLECTOR_DATA", ROOT / "data"))
     ap = argparse.ArgumentParser(prog="collector")
     ap.add_argument("command", nargs="?", default="all",
-                    choices=["all", "polymarket", "polls", "notices", "stats", "check", "scheduled"])
+                    choices=["all", "polymarket", "polls", "notices", "stats", "check", "scheduled", "polymarket-legacy"])
     ap.add_argument("--election", action="append", help="id d'élection (répétable), défaut : toutes")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL") or str(data_dir / "polls.db"),
                     help="fichier SQLite ou URL postgresql:// (défaut : $DATABASE_URL, sinon data/polls.db)")
@@ -109,6 +109,8 @@ def main():
     con = connect(args.db)
     if args.command == "scheduled":
         sys.exit(scheduled(con, args, data_dir))
+    if args.command == "polymarket-legacy":  # anciens marchés (avant fin 2022), relus sur Polygon
+        polymarket_legacy.collect(con, args.election)
     if args.command in ("all", "polymarket"):
         polymarket.collect(con, args.election)
     if args.command in ("all", "polls"):
