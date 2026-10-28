@@ -97,8 +97,9 @@ class Rpc:
         data = (BALANCE_OF_BATCH + word(0x40) + word(0x40 + 0x20 * (n + 1)) + word(n)
                 + "".join(word(int(holder, 16)) for _ in token_ids) + word(n) + "".join(word(t) for t in token_ids))
         raw = self.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
-        if not raw and self.fallback:
-            # Certaines offres gratuites répondent « 0x » sur des blocs anciens : on redemande ailleurs.
+        if self.fallback and (not raw or not int(raw[128:] or "0", 16)):
+            # Certaines offres gratuites répondent « 0x », ou des soldes tous nuls, sur des blocs anciens
+            # qu'elles n'ont pas en archive : on redemande à l'accès de repli.
             raw = self.fallback.call("eth_call", [{"to": CTF, "data": data}, hex(block)])[2:]
         words = [int(raw[i:i + 64], 16) for i in range(0, len(raw), 64)]
         return words[2:2 + n] if len(words) >= 2 + n else None  # offset, longueur, puis les soldes
