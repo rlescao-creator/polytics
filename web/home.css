@@ -6,39 +6,8 @@
 .legend span { display: inline-flex; align-items: center; gap: 7px; }
 .swatch { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); }
 .swatch.polls { background: var(--polls); } .swatch.market { background: var(--market); }
-.legend-zone::before { content: ""; width: 18px; height: 11px; background: var(--track); }
 
-/* Feuille de match : une ligne par élection, chances de la veille sur 0–100 % */
-.sheet { list-style: none; margin: 0; padding: 0; }
-.sheet-head, .match { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr); gap: 20px; align-items: center; }
-.sheet-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-  padding-bottom: 6px; border-bottom: 1px solid var(--fg); }
-.scale { display: flex; justify-content: space-between; }
-.match { padding: 12px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
-.match:hover { background: linear-gradient(90deg, transparent, var(--panel) 10%, var(--panel) 90%, transparent); }
-.who-match { display: flex; flex-direction: column; min-width: 0; }
 .country { font-family: var(--display); font-stretch: 80%; font-weight: 800; font-size: 20px; line-height: 1.05; text-transform: uppercase; }
-.meta { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.strip { position: relative; height: 30px; margin: 0 8px; }  /* les points à 0 ou 100 % restent dans la colonne */
-.strip .zone { position: absolute; left: 50%; right: 0; top: 0; bottom: 0; background: var(--track); }
-.strip .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--fg); }
-.strip .link { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: var(--faint); }
-.strip .mark { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); }
-.strip .mark.polls { background: var(--polls); }
-.strip .mark.market { background: var(--market); }
-
-@media (max-width: 640px) {
-  .sheet-head, .match { grid-template-columns: minmax(0, 1fr); gap: 6px 12px; }
-  .sheet-head > span:first-child { display: none; }
-  .sheet-head .scale { grid-column: 1 / -1; order: 2; }
-  .match .strip { grid-column: 1 / -1; order: 3; }
-}
-
-/* Infobulle */
-.tip { position: fixed; z-index: 10; pointer-events: none; display: flex; flex-direction: column; gap: 2px; max-width: 280px;
-  background: var(--panel); border: 1px solid var(--fg); padding: 8px 10px; font-size: 13px; box-shadow: 4px 4px 0 var(--fg); }
-.tip[hidden] { display: none; }
-.tip b { font-family: var(--display); font-stretch: 85%; text-transform: uppercase; font-size: 14px; }
 
 /* Nuit du vote */
 .night { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -105,7 +74,6 @@
 .lean-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); white-space: nowrap;
   margin: 0 calc(3em + 8px) 0 calc(12em + 8px); }
 /* Élection écartée des totaux */
-.match.excluded { opacity: .45; }
 .cd-card.excluded .cd-card-head::after { content: "hors décompte"; }
 
 /* Étiquette discrète sous chaque barre : médias, Polymarket */
@@ -116,4 +84,32 @@
 @media (max-width: 640px) {
   .lean-list li { grid-template-columns: 9em minmax(0, 1fr) 2.6em; }
   .lean-axis { margin: 0 calc(2.6em + 8px) 0 calc(9em + 8px); }
+}
+
+/* Depuis quand le savaient-ils : une barre par camp, du jour où il a désigné le vainqueur jusqu'au vote */
+.knew-sec[hidden] { display: none; }
+.knew-score { justify-content: flex-start; }
+.knew-score .cd-team { align-items: flex-start; }
+.knew { list-style: none; margin: 0; padding: 0; }
+.knew-head, .knew-row { display: grid; grid-template-columns: minmax(130px, 14em) minmax(0, 1fr) 6.5em; gap: 16px; align-items: center; }
+.knew-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  padding-bottom: 6px; border-bottom: 1px solid var(--fg); }
+.knew-head .scale { display: flex; justify-content: space-between; }
+.knew-row { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.knew-who { display: flex; flex-direction: column; min-width: 0; }
+.knew-who .country { font-size: 17px; }
+.knew-who small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knew-track { position: relative; height: 24px; background: linear-gradient(90deg, transparent calc(50% - .5px), var(--line) calc(50% - .5px), var(--line) calc(50% + .5px), transparent calc(50% + .5px)); }
+.knew-track::after { content: ""; position: absolute; right: 0; top: -4px; bottom: -4px; width: 2px; background: var(--fg); }
+.knew-bar { position: absolute; right: 0; }
+.knew-bar.market { top: 2px; height: 11px; background: var(--market); }
+.knew-bar.polls { top: 15px; height: 7px; background: var(--polls); }
+.knew-bar.opening { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--bg) 70%, transparent); }
+.knew-vals { display: flex; flex-direction: column; align-items: flex-end; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.knew-vals .never { font-weight: 500; opacity: .6; }
+@media (max-width: 640px) {
+  .knew-head, .knew-row { grid-template-columns: minmax(0, 1fr) 4.6em; gap: 6px 12px; }
+  .knew-head > span:first-child, .knew-head > span:last-child { display: none; }
+  .knew-head .scale { grid-column: 1 / -1; }
+  .knew-row .knew-track { grid-column: 1 / -1; grid-row: 2; }
 }

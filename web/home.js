@@ -14,7 +14,6 @@ if (new URLSearchParams(location.search).has('e')) location.replace('election.ht
 const DAY = 86400000;
 const WINDOW = 30;       // jours de terrain pris dans la moyenne en direct
 const MIN_POLLS = 3;
-const MIN_ELECTIONS = 2; // un institut entre au classement à partir de 2 élections
 const HORIZON = 100;     // compte à rebours : jours avant le vote comparés
 
 const $ = (id) => document.getElementById(id);
@@ -66,7 +65,8 @@ async function load() {
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
     all(() => db.from('bilan_quotidien').select('election_id, jour, candidat, polymarket, proba_sondages, part_sondages')
       .eq('gagnant', true).order('election_id').order('jour')),
-    all(() => db.from('bilan_premier_a_voir').select('election_id, source, genre, juste, jours_avance').order('election_id').order('source')),
+    all(() => db.from('bilan_premier_a_voir').select('election_id, genre, juste, jours_avance, premier, voit_depuis')
+      .in('genre', ['marché', 'moyenne']).order('election_id').order('genre')),
     all(() => db.from('markets').select('election_id, candidate_name, volume, last_price, closed').order('condition_id')),
     all(() => db.from('polls').select('id, fieldwork_end, fieldwork_label, institute, poll_results(candidate, value)')
       .eq('election_id', LIVE).eq('round', 1).gte('fieldwork_end', since).order('id')),
@@ -110,22 +110,16 @@ async function load() {
     return m;
   }).filter(Boolean).sort((a, b) => b.vote - a.vote);
 
-  // Classement des sources sur les élections retenues.
+  // Depuis quand chaque camp plaçait le futur vainqueur devant son adversaire final, sans plus changer d'avis.
+  // « Dès l'ouverture » : le jour où commencent les données (première cote ou premier sondage du duel).
   const counted = matches.filter((m) => !m.excluded);
-  const ids = new Set(counted.map((m) => m.id));
-  const bySource = new Map();
-  first.filter((f) => ids.has(f.election_id)).forEach((f) => {
-    const s = bySource.get(f.source) || { source: f.source, genre: f.genre, rows: [] };
-    s.rows.push(f);
-    bySource.set(f.source, s);
-  });
-  const ranking = [...bySource.values()]
-    .filter((s) => s.genre !== 'institut' || s.rows.length >= MIN_ELECTIONS)
-    .map((s) => {
-      const leads = s.rows.map((r) => r.jours_avance ?? 0);
-      return { ...s, elections: s.rows.length, right: s.rows.filter((r) => r.juste).length, avg: mean(leads), med: median(leads) };
-    })
-    .sort((a, b) => Math.round(b.avg) - Math.round(a.avg) || b.right - a.right);
+  const knew = counted.map((m) => {
+    const pick = (genre) => {
+      const f = first.find((r) => r.election_id === m.id && r.genre === genre);
+      return f ? { days: f.juste ? f.jours_avance : null, opening: !!f.juste && f.voit_depuis === f.premier } : null;
+    };
+    return { m, market: pick('marché'), polls: pick('moyenne') };
+  }).filter((k) => k.market || k.polls);
 
   // Nuit du vote de la dernière élection (table absente ou vide : pas de graphique).
   const night = matches[0]
@@ -136,7 +130,7 @@ async function load() {
   const live = elections.find((e) => e.id === LIVE);
   const liveVote = live && (live.second_round_date || live.election_date);
   return {
-    people, matches, counted, ranking, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
+    people, matches, counted, knew, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
     live: liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls),
   };
 }
@@ -278,74 +272,55 @@ function renderNight(m, night, name) {
   });
 }
 
-function renderSheet({ people, matches }) {
-  const list = $('sheet');
+// --- Depuis quand le savaient-ils : une ligne par élection, une barre par camp, du jour où il a désigné le
+// futur vainqueur (sans plus changer d'avis) jusqu'au vote.
+function renderKnew({ knew, people }) {
+  if (!knew.length) return;
+  $('sec-knew').hidden = false;
+  const found = (camp) => knew.filter((k) => k[camp]?.days != null).length;
+  const n = knew.length;
+  const fm = found('market');
+  const fp = found('polls');
+  $('knew-market').textContent = fm + '/' + n;
+  $('knew-polls').textContent = fp + '/' + n;
+  let earlier = 0; let later = 0; let same = 0;
+  knew.forEach((k) => {
+    const a = k.market?.days; const b = k.polls?.days;
+    if (a == null && b == null) return;
+    if (b == null || (a != null && a - b > 3)) earlier += 1;
+    else if (a == null || b - a > 3) later += 1;
+    else same += 1;
+  });
+  $('t-knew').textContent = fm > fp ? 'Polymarket trouve le vainqueur plus souvent que les sondages'
+    : fm < fp ? 'Les sondages trouvent le vainqueur plus souvent que Polymarket' : 'Polymarket et les sondages trouvent autant de vainqueurs';
+  $('n-knew').textContent = 'Plus tôt que les sondages dans ' + earlier + ' élection' + (earlier > 1 ? 's' : '') + ', plus tard dans '
+    + later + ', en même temps (à 3 jours près) dans ' + same + '.';
+
+  const max = Math.ceil(Math.max(...knew.flatMap((k) => [k.market?.days ?? 0, k.polls?.days ?? 0])) / 50) * 50 || 50;
+  const list = $('knew');
   list.replaceChildren();
-  const head = el('li', 'sheet-head');
+  const head = el('li', 'knew-head');
   head.setAttribute('aria-hidden', 'true');
   const scale = el('div', 'scale');
-  ['0 %', '50 %', '100 %'].forEach((t) => scale.append(el('span', '', t)));
-  head.append(el('span', '', 'Élection · vainqueur'), scale);
+  [max, max / 2, 0].forEach((d) => scale.append(el('span', '', d ? 'J-' + d : 'vote')));
+  head.append(el('span', ''), scale, el('span', ''));
   list.append(head);
-  const tip = $('tip');
-  matches.forEach((m) => {
-    const li = el('li');
-    const a = el('a', 'match' + (m.excluded ? ' excluded' : ''));
-    a.href = 'election.html?e=' + m.id;
-    const name = people.get(m.winner)?.full || m.winner;
-    a.setAttribute('aria-label', m.country + ' ' + m.year + ', vainqueur : ' + name + '. La veille : la rue ' + pct.format(m.evePolls)
-      + ' %, l’argent ' + pct.format(m.eveMarket) + ' % de chances.' + (m.excluded ? ' Hors décompte.' : ''));
-
-    const who = el('span', 'who-match');
-    who.append(el('span', 'country', m.country), el('span', 'meta', m.year + ' · ' + (m.excluded ? 'hors décompte' : name)));
-    const strip = el('span', 'strip');
-    strip.append(el('span', 'zone'), el('span', 'mid'));
-    const lo = Math.min(m.evePolls, m.eveMarket);
-    const hi = Math.max(m.evePolls, m.eveMarket);
-    const link = el('span', 'link');
-    link.style.left = lo + '%';
-    link.style.width = (hi - lo) + '%';
-    strip.append(link);
-    [['polls', m.evePolls], ['market', m.eveMarket]].forEach(([camp, v]) => {
-      const d = el('span', 'mark ' + camp);
-      d.style.left = v + '%';
-      strip.append(d);
+  [...knew].sort((a, b) => (b.market?.days ?? -1) - (a.market?.days ?? -1) || (b.polls?.days ?? -1) - (a.polls?.days ?? -1)).forEach((k) => {
+    const li = el('li', 'knew-row');
+    const who = el('span', 'knew-who');
+    who.append(el('span', 'country', k.m.country + ' ' + k.m.year.slice(2)), el('small', '', '→ ' + (people.get(k.m.winner)?.full || k.m.winner)));
+    const track = el('span', 'knew-track');
+    const vals = el('span', 'knew-vals');
+    [['market', 'Polymarket'], ['polls', 'médias']].forEach(([camp, label]) => {
+      const f = k[camp];
+      const bar = el('i', 'knew-bar ' + camp + (f?.opening ? ' opening' : ''));
+      bar.style.width = (f?.days != null ? Math.max(0.6, 100 * f.days / max) : 0) + '%';
+      track.append(bar);
+      vals.append(el('span', camp + '-ink' + (f?.days == null ? ' never' : ''), f?.days == null ? 'jamais' : f.days + ' j'));
+      bar.title = label + (f?.days == null ? ' : n’a jamais placé le vainqueur devant durablement'
+        : ' : vainqueur devant depuis ' + f.days + ' jours avant le vote' + (f.opening ? ', dès le début des données' : ''));
     });
-    a.append(who, strip);
-
-    const show = (x, y) => {
-      tip.replaceChildren(el('b', '', m.country + ' ' + m.year + ' · ' + name),
-        el('span', 'polls-ink', 'Médias : ' + pct.format(m.evePolls) + ' % de chances la veille'),
-        el('span', 'market-ink', 'Polymarket : ' + pct.format(m.eveMarket) + ' % de chances la veille'));
-      tip.hidden = false;
-      const r = tip.getBoundingClientRect();
-      tip.style.left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x + 14)) + 'px';
-      tip.style.top = Math.max(8, y - r.height - 12) + 'px';
-    };
-    a.addEventListener('pointermove', (ev) => { if (ev.pointerType === 'mouse') show(ev.clientX, ev.clientY); });
-    a.addEventListener('pointerleave', () => { tip.hidden = true; });
-    a.addEventListener('focus', () => { const r = a.getBoundingClientRect(); show(r.left + r.width / 2, r.top); });
-    a.addEventListener('blur', () => { tip.hidden = true; });
-    li.append(a);
-    list.append(li);
-  });
-}
-
-function renderRanking({ ranking }) {
-  const list = $('ranking');
-  list.replaceChildren();
-  const max = Math.max(...ranking.map((r) => r.avg), 1);
-  ranking.forEach((r) => {
-    const li = el('li', 'src' + (r.genre === 'marché' ? ' market' : r.genre === 'moyenne' ? ' polls' : ''));
-    const title = r.genre === 'marché' ? 'L’argent · Polymarket' : r.genre === 'moyenne' ? 'La rue · moyenne des sondages' : r.source;
-    const name = el('span', 'src-name', title);
-    name.append(el('small', '', r.right + ' élection' + (r.right > 1 ? 's' : '') + ' sur ' + r.elections + ' vue' + (r.right > 1 ? 's' : '')
-      + ' juste' + (r.right > 1 ? 's' : '') + ' · médiane ' + pct0.format(r.med) + ' j'));
-    const track = el('div', 'track');
-    const bar = el('span', 'bar');
-    bar.style.width = Math.max(0.5, 100 * r.avg / max) + '%';
-    track.append(bar);
-    li.append(name, track, el('span', 'days', pct0.format(r.avg) + ' j'));
+    li.append(who, track, vals);
     list.append(li);
   });
 }
@@ -520,17 +495,15 @@ function renderLean({ counted, matches }) {
 }
 
 function skeleton() {
-  $('sheet').replaceChildren(...Array.from({ length: 6 }, () => el('li', 'skel skel-line')));
-  $('ranking').replaceChildren(...Array.from({ length: 5 }, () => el('li', 'skel skel-line')));
+  $('knew').replaceChildren(...Array.from({ length: 6 }, () => el('li', 'skel skel-line')));
 }
 
 skeleton();
 load().then((data) => {
   renderCountdown({ ...data, matches: data.counted, excluded: data.matches.filter((m) => m.excluded) });
+  renderKnew(data);
   renderLast(data);
-  renderSheet(data);
   renderLean(data);
-  renderRanking(data);
 }).catch((err) => {
   const status = $('status');
   status.hidden = false;
