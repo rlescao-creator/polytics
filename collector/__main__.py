@@ -6,11 +6,12 @@ Le dossier de données (base SQLite + cache des notices) vaut ./data, ou $COLLEC
 """
 import argparse
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import sys
 from pathlib import Path
 
 from . import check, notices, polymarket, polymarket_legacy, wikipedia_polls
+from .config import ELECTIONS
 from .db import connect
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,23 +61,37 @@ def stats(con):
         print(f"  {r['n']:3}  {r['sponsor']:<20} {r['media_type']:<6} {r['inst']}")
 
 
+def live_elections(margin_days=7):
+    """Élections à venir ou votées depuis moins de margin_days jours : les seules qui bougent encore."""
+    limit = date.today() - timedelta(days=margin_days)
+    return [eid for eid, e in ELECTIONS.items()
+            if not (e["second_round_date"] or e["election_date"])
+            or date.fromisoformat(e["second_round_date"] or e["election_date"]) >= limit]
+
+
 def scheduled(con, args, data_dir):
     """Un passage de tâche planifiée (GitHub Actions, cron) : lancée chaque heure, elle se termine à chaque fois.
 
-    Polymarket à chaque passage ; sondages et notices une fois par jour, à l'heure UTC
-    $POLLS_HOUR_UTC (6 par défaut), ou à chaque passage si $COLLECT_POLLS vaut 1 (lancement manuel).
+    Polymarket à chaque passage ; sondages et notices aux heures UTC de $POLLS_HOURS_UTC (6, 12 et 18
+    par défaut : GitHub saute parfois des passages planifiés, trois essais par jour en garantissent un),
+    ou à chaque passage si $COLLECT_POLLS vaut 1 (lancement manuel).
+    Seules les élections en cours sont relues, sauf --election ou lancement manuel ($COLLECT_POLLS) : les
+    élections passées ne changent plus, et les recharger toutes prend un quart d'heure.
     Une étape en échec n'empêche pas les suivantes, mais le code de sortie le signale pour que la
     plateforme affiche l'échec.
     """
-    hour = int(os.environ.get("POLLS_HOUR_UTC", "6"))
+    hours = {int(h) for h in os.environ.get("POLLS_HOURS_UTC", "6,12,18").split(",")}
+    manual = os.environ.get("COLLECT_POLLS") == "1"
+    elections = args.election or (None if manual else live_elections())
+
     def markets():
-        if polymarket.collect(con, args.election):
+        if polymarket.collect(con, elections):
             raise RuntimeError("Polymarket injoignable")
 
     steps = [("polymarket", markets)]
-    if datetime.now(timezone.utc).hour == hour or os.environ.get("COLLECT_POLLS") == "1":
+    if datetime.now(timezone.utc).hour in hours or manual:
         steps += [
-            ("polls", lambda: wikipedia_polls.collect(con, args.election)),
+            ("polls", lambda: wikipedia_polls.collect(con, elections)),
             ("notices", lambda: notices.collect(con, data_dir / "notices")),
         ]
     failed = []

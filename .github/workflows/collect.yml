@@ -1,15 +1,15 @@
-# Collecte planifiée : cotes Polymarket chaque heure, sondages et notices une fois par jour (6 h UTC).
+# Collecte planifiée : cotes Polymarket chaque heure, sondages et notices à 6, 12 et 18 h UTC (élections en cours).
 # Les serveurs GitHub sont hors de France, donc Polymarket y est joignable.
 # Secret requis : DATABASE_URL (Supabase > Connect > Session pooler, avec le mot de passe de la base).
 name: Collecte
 
 on:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "23 * * * *"  # loin de l'heure pile, où GitHub saute le plus de passages
   workflow_dispatch:
     inputs:
       sondages:
-        description: "Mettre aussi à jour les sondages et les notices"
+        description: "Mettre aussi à jour les sondages et les notices, toutes élections comprises"
         type: boolean
         default: false
       historique_polygon:
@@ -34,9 +34,9 @@ jobs:
       COLLECT_POLLS: ${{ inputs.sondages && '1' || '0' }}
       PYTHONUNBUFFERED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
           cache: pip

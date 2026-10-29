@@ -92,8 +92,10 @@ adresse (ou celle du site en ligne) comme **Site URL**, pour que le lien de conf
 
 ### Collecteur : GitHub Actions
 
-`.github/workflows/collect.yml` lance `python -m collector scheduled` toutes les heures à hh:05 (UTC) :
-cotes Polymarket à chaque passage, sondages et notices une fois par jour à 6 h UTC. Les serveurs GitHub
+`.github/workflows/collect.yml` lance `python -m collector scheduled` toutes les heures à hh:23 (UTC) :
+cotes Polymarket à chaque passage, sondages et notices à 6, 12 et 18 h UTC (GitHub saute parfois des
+passages planifiés). Seules les élections en cours sont relues ; cocher « sondages » au lancement manuel
+recharge toutes les élections. Les serveurs GitHub
 sont hors de France, donc Polymarket y est joignable.
 
 1. Dans le dépôt GitHub : **Settings > Secrets and variables > Actions > New repository secret**,

@@ -7,6 +7,8 @@ Autres pays (en.wikipedia) : pages « Opinion polling for… » de formes varié
 quand son en-tête renvoie vers la page Wikipedia d'un candidat listé dans la configuration de l'élection.
 """
 import re
+import unicodedata
+from collections import Counter
 import urllib.parse
 from datetime import date
 
@@ -44,6 +46,26 @@ def _institute(name):
     """'Ifop (rolling)' -> 'Ifop', 'Harris Interractive' -> 'Harris' : un nom par institut."""
     base = re.sub(r"\s*\(.*?\)", "", name).strip()
     return INSTITUTE_ALIASES.get(base.lower(), base)
+
+
+def _spelling_key(name):
+    """'Redfield & Wilton Strategies' = 'Redfield and Wilton Strategies', 'Forbes / HarrisX' = 'HarrisX / Forbes',
+    'Analogías' = 'Analogias' : lettres seules, sans accents ni casse, parties séparées par '/' triées."""
+    parts = re.split(r"\s*/\s*", re.sub(r"\s(?:&|and)\s", " ", name, flags=re.I))
+    bare = lambda t: re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower())
+    return "|".join(sorted(bare(t) for t in parts))
+
+
+def _merge_spellings(polls):
+    """Une seule écriture par institut dans une élection : la plus fréquente parmi ses variantes."""
+    for p in polls:
+        p["institute"] = re.sub(r"\s*/\s*", " / ", re.sub(r"[\"“”«»]", "", p["institute"])).strip()
+    counts = Counter(p["institute"] for p in polls)
+    best = {}
+    for name, n in counts.most_common():
+        best.setdefault(_spelling_key(name), name)
+    for p in polls:
+        p["institute"] = best[_spelling_key(p["institute"])]
 
 
 def _clean(s):
@@ -138,16 +160,18 @@ def _parse_cell(cell, column):
     for sup in cell.find_all("sup"):
         sup.decompose()
     parts = re.split(r"<hr\s*/?>", str(cell))
+    # Sans <hr>, deux candidats dans la même case : '12 % Bertrand 8 % Pécresse'.
+    texts = [chunk for part in parts
+             for chunk in re.split(r"(?<=[A-Za-zÀ-ÿ)])\s+(?=<?\s*\d)", _clean(BeautifulSoup(part, "html.parser").get_text(" ")))]
     out = []
-    for part in parts:
-        txt = _clean(BeautifulSoup(part, "html.parser").get_text(" "))
+    for txt in texts:
         m = NUMBER.search(txt)
         if not m:
             continue
         value = float(m.group(0).replace(",", "."))
         rest = (txt[:m.start()] + txt[m.end():]).strip(" |")
         notes = ["inférieur à"] if "<" in rest else []
-        name = _clean(rest.replace("<", ""))
+        name = _clean(rest.replace("<", "")).lstrip("% ")  # '26 % Bertrand' : le signe reste collé au nom
         if re.search(r"[A-Za-zÀ-ÿ]", name):
             notes.append(f"colonne {column}")
             out.append((name, value, "; ".join(notes)))
@@ -227,7 +251,8 @@ def _parse_table(table, headings, page_url, election_year=None):
 def _fieldwork_end_en(label, default_year=None):
     """'October 30 – November 2, 2024' -> '2024-11-02' ; le jour seul reprend le dernier mois cité.
 
-    Sans année dans la case ('10–13 Aug'), on prend default_year (celle du titre de section).
+    Sans année dans la case ('10–13 Aug'), on prend default_year (celle du titre de section) ;
+    sans jour ('February 2026'), le 15 du mois.
     """
     years = re.findall(r"\b(20\d\d)\b", label)  # '31 December 2023–1 January 2024' : la dernière compte
     tokens = re.findall(r"([A-Za-z]{3,})\.?\s*(\d{1,2})?|\b(\d{1,2})\b(?!\d)", re.sub(r"\b20\d\d\b", "", label))
@@ -238,6 +263,8 @@ def _fieldwork_end_en(label, default_year=None):
         elif lone:
             day = int(lone)
     y = int(years[-1]) if years else default_year
+    if month and not day:  # 'Apr 2025' : mois seul, on prend le milieu du mois
+        day = 15
     if not (y and month and day):
         return None
     try:
@@ -419,6 +446,7 @@ def collect(con, election_ids=None):
                     continue
                 polls += _parse_table(el, headings, page_url, election_year)
 
+        _merge_spellings(polls)
         # Rafraîchissement complet : Wikipedia n'a pas d'identifiant stable par ligne.
         con.execute("DELETE FROM polls WHERE election_id = ? AND source = ?", (eid, page_url))
         for p in polls:
