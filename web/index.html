@@ -42,6 +42,25 @@
       <p class="deck" id="deck"><span class="skel skel-text"></span></p>
     </section>
 
+    <section class="block countdown" aria-labelledby="t-countdown" id="sec-countdown" hidden>
+      <div class="block-head">
+        <p class="kicker">Présidentielle française 2027</p>
+        <h2 id="t-countdown">À ce stade, qui avait raison ?</h2>
+      </div>
+      <div class="cd-top">
+        <span class="cd-j" id="cd-j">J-</span>
+        <span class="cd-sub" id="cd-sub"></span>
+      </div>
+      <p class="deck" id="cd-deck"></p>
+      <figure class="chart" id="chart-countdown"></figure>
+      <label class="cd-slider">
+        <span>Revenir à un autre moment de la campagne</span>
+        <input type="range" id="cd-range" min="1" max="365" step="1">
+        <output id="cd-out" for="cd-range"></output>
+      </label>
+      <ol class="cd-grid" id="cd-grid"></ol>
+    </section>
+
     <section class="block" aria-labelledby="t-last" id="sec-last">
       <div class="block-head">
         <p class="kicker">Dernier match</p>
@@ -94,6 +113,7 @@
       <p><b>Le score</b> : pour chaque élection, l’erreur moyenne de chaque camp sur toute la campagne, jour par jour (score de Brier : l’écart au carré entre la chance donnée au vainqueur et 100 %). Le camp qui se trompe le moins gagne l’élection.</p>
       <p><b>L’argent</b> : le volume d’un marché Polymarket, c’est le total des dollars échangés depuis son ouverture, achats et ventes, sur le « oui » comme sur le « non ». « 48 M$ sur Lula » veut dire 48 M$ échangés sur le marché « Lula gagne », pas 48 M$ pariés pour lui.</p>
       <p><b>La rue</b> : le nombre de sondages publiés dans l’année avant le vote, et la somme de leurs échantillons. Certains instituts ne publient pas leur taille d’échantillon : le nombre de personnes interrogées est alors un minimum.</p>
+      <p><b>À J-X</b> : le favori de l’argent est le candidat le plus coté sur Polymarket la veille au soir ; celui de la rue, le candidat en tête de la moyenne des sondages des 30 jours précédents (1er tour avant celui-ci, 2nd tour ensuite, 3 sondages minimum). Être en tête au 1er tour n’est pas la même chose qu’être favori pour la victoire : c’est pourtant ce que titrent les médias.</p>
       <p><b>Les sondages en probabilité</b> : l’écart moyen entre les deux finalistes dans les sondages de la dernière semaine connue, converti en chance de victoire avec une erreur type de 3,5 points. Polymarket : prix de la part « Oui ».</p>
       <p><b>Prudence</b> : <span id="caution">quelques élections, c’est peu</span>. Un score n’est pas une loi, et un camp peut gagner le match en se trompant de favori la veille.</p>
       <p><b>Sources</b> : sondages des listes de Wikipedia (CC BY-SA), cotes Polymarket, résultats officiels. Polymarket est bloqué en France par l’ANJ ; les cotes sont relevées depuis l’étranger.</p>

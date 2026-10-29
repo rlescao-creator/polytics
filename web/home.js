@@ -59,7 +59,7 @@ async function all(query) {
 
 async function load() {
   const since = isoDay(new Date(Date.now() - 120 * DAY));
-  const [elections, results, cands, daily, first, markets, livePolls, pollMeta] = await Promise.all([
+  const [elections, results, cands, daily, first, markets, livePolls, pollMeta, favoris] = await Promise.all([
     all(() => db.from('elections').select('id, country, election_date, second_round_date').order('id')),
     all(() => db.from('results').select('election_id, round, candidate, value').order('election_id')),
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
@@ -70,6 +70,9 @@ async function load() {
     all(() => db.from('polls').select('id, fieldwork_end, fieldwork_label, institute, poll_results(candidate, value)')
       .eq('election_id', LIVE).eq('round', 1).gte('fieldwork_end', since).order('id')),
     all(() => db.from('polls').select('election_id, fieldwork_end, fieldwork_label, institute, sample_size').order('id')),
+    // Table absente tant que la migration bilan_favoris n'est pas appliquée : pas de compte à rebours.
+    all(() => db.from('bilan_favoris').select('election_id, jours, gagnant, favori_marche, proba_marche, favori_sondages, moyenne_sondages')
+      .order('election_id').order('jours')).catch(() => null),
   ]);
   const people = new Map(cands.map((c) => [c.name, { full: c.full_name || c.name, color: c.parties && c.parties.color }]));
 
@@ -139,8 +142,9 @@ async function load() {
     : [];
 
   const live = elections.find((e) => e.id === LIVE);
+  const liveVote = live && (live.second_round_date || live.election_date);
   return {
-    people, matches, ranking, night,
+    people, matches, ranking, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
     live: { ...liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls), stakes: live ? stakes(live, today) : null },
   };
 }
@@ -430,6 +434,119 @@ function renderRanking({ ranking }) {
   });
 }
 
+// --- Compte à rebours : à J-d du vote décisif, le favori de chaque camp a-t-il fini par gagner ?
+function favoriteAt(favoris, matches, d) {
+  return matches.map((m) => {
+    const row = favoris.find((f) => f.election_id === m.id && f.jours === d);
+    const pick = (name, value) => (name ? { name, value: +value, right: name === row.gagnant } : null);
+    return { m, polls: row && pick(row.favori_sondages, row.moyenne_sondages), market: row && pick(row.favori_marche, row.proba_marche) };
+  });
+}
+
+function tally(rows, camp) {
+  const seen = rows.filter((r) => r[camp]);
+  return { right: seen.filter((r) => r[camp].right).length, n: seen.length };
+}
+
+const longDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+function renderCountdown(data) {
+  const { favoris, matches, liveVote, liveFirst, live, people } = data;
+  if (!favoris || !favoris.length || !liveVote) return;
+  const today = utc(isoDay(new Date()));
+  const J = Math.round((liveVote - today) / DAY);
+  if (J < 1) return;
+  $('sec-countdown').hidden = false;
+  $('cd-j').textContent = 'J-' + J;
+  $('cd-sub').textContent = 'avant le 2nd tour, le ' + longDate.format(liveVote)
+    + (liveFirst && liveFirst < liveVote ? ' · 1er tour dans ' + Math.round((liveFirst - today) / DAY) + ' jours' : '');
+  const name = (c) => people.get(c)?.full || c;
+  const max = Math.min(365, Math.max(...favoris.map((f) => f.jours)));
+
+  // Courbe : part des élections où le favori de chaque camp a gagné, selon le nombre de jours avant le vote.
+  const curve = [];
+  for (let d = 1; d <= max; d++) {
+    const rows = favoriteAt(favoris, matches, d);
+    [['La rue', 'polls'], ['L’argent', 'market']].forEach(([serie, camp]) => {
+      const t = tally(rows, camp);
+      curve.push({ serie, d, value: t.n >= 3 ? 100 * t.right / t.n : NaN, right: t.right, n: t.n });
+    });
+  }
+  const color = (s) => (s === 'La rue' ? 'var(--polls)' : 'var(--market)');
+  const target = $('chart-countdown');
+  let selected = Math.min(J, max);
+  const draw = () => {
+    const width = target.clientWidth;
+    const narrow = width < 520;
+    const finite = curve.filter((p) => Number.isFinite(p.value));
+    const ends = ['La rue', 'L’argent'].map((s) => finite.filter((p) => p.serie === s).sort((a, b) => a.d - b.d)[0]).filter(Boolean);
+    target.replaceChildren(Plot.plot({
+      width, height: narrow ? 260 : 320, marginLeft: 40, marginRight: narrow ? 70 : 90, marginTop: 28,
+      style: { color: 'var(--muted)', background: 'transparent', fontSize: '12px' },
+      x: { domain: [max, 0], label: 'jours avant le vote →', tickFormat: (d) => 'J-' + d, ticks: narrow ? 4 : 8 },
+      y: { domain: [0, 100], label: '↑ le favori a fini par gagner', ticks: [0, 25, 50, 75, 100], tickFormat: (v) => v + ' %', grid: true },
+      marks: [
+        Plot.ruleY([50], { stroke: 'var(--fg)', strokeOpacity: 0.4, strokeDasharray: '2,4' }),
+        Plot.ruleX([J], { stroke: 'var(--fg)', strokeWidth: 2 }),
+        Plot.text([{ d: J }], { x: 'd', frameAnchor: 'top', dy: -16, text: () => '2027 aujourd’hui', fill: 'var(--fg)', fontWeight: 700 }),
+        ...(selected !== J ? [Plot.ruleX([selected], { stroke: 'var(--fg)', strokeDasharray: '3,3' })] : []),
+        Plot.line(curve, { x: 'd', y: 'value', z: 'serie', stroke: (p) => color(p.serie), strokeWidth: 2.5, curve: 'step-after' }),
+        Plot.text(ends, { x: 'd', y: 'value', text: 'serie', dx: 8, textAnchor: 'start', fill: (p) => color(p.serie), fontWeight: 700 }),
+        Plot.tip(finite, Plot.pointer({ x: 'd', y: 'value', title: (p) => p.serie + ' à J-' + p.d + '\u00a0: le favori a gagné '
+          + p.right + ' fois sur ' + p.n, fill: 'var(--panel)', stroke: 'var(--line)' })),
+      ],
+    }));
+  };
+
+  const range = $('cd-range');
+  range.max = max;
+  range.value = selected;
+  const show = (d) => {
+    selected = d;
+    $('cd-out').textContent = 'J-' + d + (d === J ? ' (aujourd’hui pour 2027)' : '');
+    const rows = favoriteAt(favoris, matches, d);
+    const t = { polls: tally(rows, 'polls'), market: tally(rows, 'market') };
+    const deck = $('cd-deck');
+    const b = (txt, cls) => el('b', cls, txt);
+    deck.replaceChildren('À J-' + d + ' des élections précédentes, ');
+    const part = (camp, label) => (t[camp].n
+      ? [label + ' a fini par gagner ', b(t[camp].right + ' fois sur ' + t[camp].n, camp + '-ink')]
+      : [label + '\u00a0: pas encore de données']);
+    deck.append(...part('polls', 'le candidat en tête des sondages'), ' ; ', ...part('market', 'le favori de Polymarket'), '. ');
+    if (d === J) {
+      const p = live.pollTop[0];
+      const mk = live.marketTop[0];
+      if (p && mk) {
+        deck.append('Pour 2027, aujourd’hui\u00a0: la rue met ', b(name(p.candidate) + ' (' + pct0.format(p.value) + ' %)', 'polls-ink'),
+          ' en tête, l’argent ', b(name(mk.candidate) + ' (' + pct0.format(mk.value) + ' %)', 'market-ink'), '.');
+      }
+    }
+    const grid = $('cd-grid');
+    grid.replaceChildren();
+    rows.forEach((r) => {
+      const li = el('li', 'cd-card');
+      const head = el('div', 'cd-head');
+      head.append(el('span', 'country', r.m.country), el('span', 'meta', r.m.year + ' · vainqueur ' + name(r.m.winner)));
+      li.append(head);
+      [['polls', 'La rue'], ['market', 'L’argent']].forEach(([camp, label]) => {
+        const f = r[camp];
+        const line = el('div', 'cd-line ' + camp + (f ? (f.right ? ' right' : ' wrong') : ' none'));
+        line.append(el('span', 'cd-camp', label),
+          el('span', 'cd-name', f ? name(f.name) + ' ' + pct0.format(f.value) + ' %' : (camp === 'polls' ? 'pas assez de sondages' : 'pas encore de marché')),
+          el('span', 'cd-mark', f ? (f.right ? '✓' : '✗') : ''));
+        line.setAttribute('aria-label', label + ' : ' + (f ? name(f.name) + (f.right ? ', a gagné' : ', a perdu') : 'pas de données'));
+        li.append(line);
+      });
+      grid.append(li);
+    });
+    draw();
+  };
+  range.addEventListener('input', () => show(+range.value));
+  show(selected);
+  let w = target.clientWidth;
+  new ResizeObserver(() => { if (target.clientWidth !== w) { w = target.clientWidth; draw(); } }).observe(target);
+}
+
 function skeleton() {
   $('sheet').replaceChildren(...Array.from({ length: 6 }, () => el('li', 'skel skel-line')));
   $('ranking').replaceChildren(...Array.from({ length: 5 }, () => el('li', 'skel skel-line')));
@@ -438,6 +555,7 @@ function skeleton() {
 skeleton();
 load().then((data) => {
   renderScore(data);
+  renderCountdown(data);
   renderLast(data);
   renderSheet(data);
   renderLive(data);

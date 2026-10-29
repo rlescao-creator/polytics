@@ -95,3 +95,25 @@
 .night { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .night[hidden] { display: none; }
 .night h3 { margin: 0; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 19px; text-transform: uppercase; }
+
+/* Compte à rebours 2027 */
+.countdown[hidden] { display: none; }
+.cd-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.cd-j { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: clamp(72px, 16vw, 160px); line-height: .85; letter-spacing: -.02em; }
+.cd-sub { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.cd-slider { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cd-slider input { width: 100%; accent-color: var(--fg); }
+.cd-slider output { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 16px; color: var(--fg); white-space: nowrap; }
+@media (max-width: 640px) { .cd-slider { grid-template-columns: 1fr auto; } .cd-slider > span { grid-column: 1 / -1; } }
+.cd-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0 24px; }
+.cd-card { border-top: 1px solid var(--fg); padding: 8px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.cd-head { display: flex; flex-direction: column; margin-bottom: 2px; }
+.cd-line { display: grid; grid-template-columns: 5.2em minmax(0, 1fr) 1.2em; gap: 8px; align-items: baseline; font-size: 13px; }
+.cd-camp { font-family: var(--display); font-stretch: 85%; font-weight: 800; text-transform: uppercase; font-size: 12px; }
+.cd-line.polls .cd-camp { color: var(--polls); } .cd-line.market .cd-camp { color: var(--market); }
+.cd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cd-mark { font-weight: 900; text-align: right; }
+.cd-line.right .cd-mark { color: var(--fg); }
+.cd-line.wrong .cd-name { text-decoration: line-through; text-decoration-color: var(--faint); color: var(--muted); }
+.cd-line.wrong .cd-mark { color: var(--muted); }
+.cd-line.none .cd-name { color: var(--faint); font-style: italic; }

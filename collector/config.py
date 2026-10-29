@@ -4,8 +4,9 @@ ELECTIONS = {
     "fr-2027": {
         "name": "Élection présidentielle française 2027",
         "country": "FR",
-        "election_date": None,  # date du 1er tour pas encore fixée par décret
-        "second_round_date": None,
+        # Fixées en conseil des ministres : https://www.info.gouv.fr/actualite/election-presidentielle-2027
+        "election_date": "2027-04-18",
+        "second_round_date": "2027-05-02",
         "polymarket_events": ["next-french-presidential-election"],
         "wikipedia": ("fr", "Liste de sondages sur l'élection présidentielle française de 2027"),
     },
