@@ -54,6 +54,10 @@ JOIN markets USING (condition_id) WHERE candidate = 'Marine Le Pen' ORDER BY ts;
   viennent des pages « Opinion polling for… » de la Wikipedia anglaise ; une colonne est lue quand son
   en-tête renvoie vers la page d'un candidat listé dans `candidates` (config). Seul le tour décisif est
   chargé dans `results`.
+- « Qui l'a vu en premier » (`premier_a_voir`) : une source voit le vainqueur à partir du jour où elle le
+  place devant son adversaire final sans plus changer d'avis jusqu'au vote ; toutes les sources partent du
+  premier jour coté sur Polymarket. AtlasIntel, Ipsos et YouGov gardent un seul nom d'un pays à l'autre
+  (média associé et filiale ôtés par `normalize_institute`).
 - Trouver le slug Polymarket d'une élection : lancer le workflow avec `recherche_polymarket`
   (ex. `--query chile+presidential` ou `--query slug:brazil-presidential-election`).
 
@@ -66,7 +70,7 @@ Migrations dans `supabase/migrations/`, à appliquer dans l'ordre.
 | 11 tables, 12 clés étrangères | `elections`, `polls` → `poll_results`, `notices` → `notice_sponsors`, `markets` → `market_prices`, `results`, `parties` → `candidates`, `favorites` → `auth.users` |
 | RLS sur toutes les tables | lecture publique des données ; `favorites` : chaque utilisateur ne voit et ne modifie que ses lignes |
 | Triggers | `ensure_candidate` (nom inconnu → fiche candidat), `polls_normalize_institute` (un nom par institut), `markets_link_candidate` (marché Polymarket → fiche candidat) |
-| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (toutes les élections passées), `mes_favoris` |
+| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (toutes les élections passées), `premier_a_voir` et `classement_premier_a_voir` (qui a vu le vainqueur en premier), `mes_favoris` |
 | Vue | `v_poll_sponsors` (sondages avec leurs commanditaires) |
 
 Aucun nom de candidat ni couleur n'est écrit dans le tableau de bord : les noms viennent des sondages,
