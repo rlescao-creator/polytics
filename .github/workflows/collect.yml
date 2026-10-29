@@ -20,6 +20,10 @@ on:
         description: "Lister les événements Polymarket répondant à ces requêtes (ex. --query argentina), sans rien écrire"
         type: string
         default: ""
+      articles_medias:
+        description: "Relever les articles de sondage des chaînes (ex. --media BFMTV --since 2025-01-01), au lieu de la collecte"
+        type: string
+        default: ""
 
 concurrency:
   group: collecte
@@ -28,7 +32,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90  # relevé complet des articles d'une chaîne
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       COLLECT_POLLS: ${{ inputs.sondages && '1' || '0' }}
@@ -51,7 +55,7 @@ jobs:
           fi
 
       - name: Collecter
-        if: ${{ !inputs.historique_polygon && !inputs.recherche_polymarket }}
+        if: ${{ !inputs.historique_polygon && !inputs.recherche_polymarket && !inputs.articles_medias }}
         run: python -m collector scheduled
 
       - name: Reconstruire les anciennes cotes Polymarket
@@ -66,3 +70,9 @@ jobs:
         env:
           ARGS: ${{ inputs.recherche_polymarket }}
         run: python -m collector polymarket-search $ARGS
+
+      - name: Relever les articles de sondage des chaînes
+        if: ${{ inputs.articles_medias }}
+        env:
+          ARGS: ${{ inputs.articles_medias }}
+        run: python -m collector media $ARGS --quiet

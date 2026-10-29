@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Présidentielle 2027</title>
-  <meta name="description" content="Présidentielle 2027 : moyenne des sondages du premier tour et cotes Polymarket, mises à jour chaque jour.">
+  <title>Polytics</title>
+  <meta name="description" content="Présidentielles : moyenne des sondages et cotes Polymarket côte à côte, et pour les élections passées, qui avait vu le vainqueur en premier.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
@@ -16,26 +16,44 @@
       <a href="suivi.html">Mon suivi</a>
     </nav>
 
+    <nav class="picker" id="picker" aria-label="Élections"></nav>
+
     <header class="hero">
-      <p class="eyebrow" id="updated">Présidentielle 2027 · chargement…</p>
-      <h1 id="headline">Sondages et marché, côte à côte</h1>
+      <p class="eyebrow" id="updated">Chargement…</p>
+      <h1 id="headline">&nbsp;</h1>
       <p class="lede" id="lede"></p>
+      <div class="rounds" id="rounds" role="group" aria-label="Tour" hidden></div>
     </header>
 
     <section class="block" aria-labelledby="t-now">
       <div class="block-head">
         <h2 id="t-now">Deux mesures, deux échelles</h2>
-        <p class="note">Les sondages mesurent des <b>intentions de vote au premier tour</b>. Polymarket donne une <b>chance de gagner l'élection</b>. Ce ne sont pas les mêmes chiffres : chaque colonne a sa propre échelle.</p>
+        <p class="note" id="n-now"></p>
       </div>
-      <div class="board" id="board" role="table" aria-label="Candidats : sondages et Polymarket">
-        <p class="empty">Chargement…</p>
+      <div class="board" id="board" role="table" aria-label="Candidats : sondages et Polymarket"></div>
+      <p class="hint">Cliquez sur un candidat pour le suivre dans les graphiques.</p>
+    </section>
+
+    <section class="block" aria-labelledby="t-first" id="sec-first" hidden>
+      <div class="block-head">
+        <h2 id="t-first">Qui l'a vu en premier ?</h2>
+        <p class="note" id="n-first"></p>
       </div>
+      <ol class="first" id="first"></ol>
+    </section>
+
+    <section class="block" aria-labelledby="t-duel" id="sec-duel" hidden>
+      <div class="block-head">
+        <h2 id="t-duel">Chance de victoire, jour par jour</h2>
+        <p class="note">Polymarket : prix de la part « Oui ». Sondages : l'écart moyen entre les deux finalistes, converti en probabilité avec une erreur type de 3,5 points.</p>
+      </div>
+      <figure class="chart" id="chart-duel"></figure>
     </section>
 
     <section class="block" aria-labelledby="t-polls">
       <div class="block-head">
-        <h2 id="t-polls">Intentions de vote au premier tour</h2>
-        <p class="note">Chaque point est un sondage. La ligne est la moyenne des 5 derniers sondages, sur 90 jours au plus : elle s'interrompt quand il y en a moins de 3.</p>
+        <h2 id="t-polls">Intentions de vote</h2>
+        <p class="note" id="n-polls"></p>
       </div>
       <figure class="chart" id="chart-polls"></figure>
     </section>
@@ -53,12 +71,13 @@
         <h2 id="t-latest">Derniers sondages</h2>
         <p class="note">Quand un institut teste plusieurs hypothèses de candidatures, on fait la moyenne des hypothèses où le candidat figure.</p>
       </div>
-      <ol class="latest" id="latest"><li class="empty">Chargement…</li></ol>
+      <ol class="latest" id="latest"></ol>
     </section>
 
     <footer class="method">
       <h2>Méthode et sources</h2>
-      <p><b>Sondages</b> : <a href="https://fr.wikipedia.org/wiki/Liste_de_sondages_sur_l%27%C3%A9lection_pr%C3%A9sidentielle_fran%C3%A7aise_de_2027">liste de Wikipedia</a> (licence CC BY-SA), commanditaires lus dans les notices de la <a href="https://www.commission-des-sondages.fr/">Commission des sondages</a>. Un sondage compte une fois, quel que soit son nombre d'hypothèses. La moyenne d'un candidat n'est calculée qu'à partir de 3 sondages sur 30 jours.</p>
+      <p><b>Sondages</b> : <a id="src-wiki" href="https://fr.wikipedia.org/">listes de Wikipedia</a> (licence CC BY-SA)<span id="src-cs">, commanditaires lus dans les notices de la <a href="https://www.commission-des-sondages.fr/">Commission des sondages</a></span>. Un sondage compte une fois, quel que soit son nombre d'hypothèses. La moyenne d'un candidat n'est calculée qu'à partir de 3 sondages sur 30 jours.</p>
+      <p><b>Élections passées</b> : sondages et résultat sont comparés sur la même base, la part des voix entre les candidats du résultat (indécis et petits candidats exclus). Seuls comptent les sondages qui testent tous ces candidats.</p>
       <p><b>Marché</b> : <a href="https://polymarket.com/">Polymarket</a>, marché sur le vainqueur de l'élection. Polymarket est bloqué en France par l'ANJ ; les cotes sont relevées depuis l'étranger. Une cote reflète ce que parient quelques milliers de personnes, pas une intention de vote.</p>
     </footer>
   </main>

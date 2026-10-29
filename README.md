@@ -75,6 +75,10 @@ sondage du même institut terminé dans les 14 jours ; `couverture_medias` (sond
 publiés, part de ses propres sondages, instituts) et `selection_medias` (écart, candidat par candidat,
 entre les sondages relayés et la moyenne de tous les sondages des 30 jours précédents) en tirent la mesure.
 
+Pour le lancer : GitHub > **Actions > Collecte > Run workflow**, champ « Relever les articles de sondage
+des chaînes » = `--media BFMTV --since 2021-09-01` (puis `TF1-LCI`, puis `franceinfo`, une chaîne par
+lancement). En local : `.venv/bin/python -m collector media --media BFMTV --since 2021-09-01`.
+
 Avant de le lancer :
 - **Droits** : les robots.txt de ces trois sites interdisent les agents d'IA (ClaudeBot, Claude-User, GPTBot…),
   ce qui vaut opposition à la fouille de textes au sens de la directive européenne sur le droit d'auteur.
