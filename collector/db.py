@@ -44,10 +44,11 @@ class Sqlite:
         self.con.row_factory = sqlite3.Row
         self.con.execute("PRAGMA foreign_keys = ON")
         self.con.executescript(SCHEMA.read_text())
-        try:  # bases créées avant l'ajout de la colonne
-            self.con.execute("ALTER TABLE elections ADD COLUMN second_round_date TEXT")
-        except sqlite3.OperationalError:
-            pass
+        for table, column in (("elections", "second_round_date"), ("polls", "media")):
+            try:  # bases créées avant l'ajout de la colonne
+                self.con.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     def execute(self, sql, params=()):
         return self.con.execute(sql, params)

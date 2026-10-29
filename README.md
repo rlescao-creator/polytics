@@ -59,7 +59,8 @@ JOIN markets USING (condition_id) WHERE candidate = 'Marine Le Pen' ORDER BY ts;
 - « Qui l'a vu en premier » (`premier_a_voir`) : une source voit le vainqueur à partir du jour où elle le
   place devant son adversaire final sans plus changer d'avis jusqu'au vote ; toutes les sources partent du
   premier jour coté sur Polymarket. AtlasIntel, Ipsos et YouGov gardent un seul nom d'un pays à l'autre
-  (média associé et filiale ôtés par `normalize_institute`).
+  (média associé et filiale ôtés par `normalize_institute`). Hors France et États-Unis, la case
+  « Institut / Média » de Wikipedia est coupée : l'institut d'un côté, le média dans `polls.media`.
 - Trouver le slug Polymarket d'une élection : lancer le workflow avec `recherche_polymarket`
   (ex. `--query chile+presidential` ou `--query slug:brazil-presidential-election`).
 

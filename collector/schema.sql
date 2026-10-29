@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS polls (
   round           INTEGER,                  -- 1 ou 2
   section         TEXT NOT NULL,            -- chemin des titres Wikipedia
   institute       TEXT NOT NULL,
+  media           TEXT,                     -- hors France : média associé ('IBRiS / Onet' -> 'Onet')
   notice_url      TEXT,                     -- notice officielle Commission des sondages
   fieldwork_label TEXT NOT NULL,            -- tel qu'affiché, ex. '21-22 octobre'
   fieldwork_end   TEXT,                     -- ISO déduit, NULL si ambigu

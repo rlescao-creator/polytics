@@ -60,6 +60,8 @@ def _merge_spellings(polls):
     """Une seule écriture par institut dans une élection : la plus fréquente parmi ses variantes."""
     for p in polls:
         p["institute"] = re.sub(r"\s*/\s*", " / ", re.sub(r"[\"“”«»]", "", p["institute"])).strip()
+        if p.get("media"):
+            p["media"] = re.sub(r"[\"“”«»]", "", p["media"]).strip()
     counts = Counter(p["institute"] for p in polls)
     best = {}
     for name, n in counts.most_common():
@@ -386,6 +388,8 @@ def _parse_table_intl(table, headings, page_url, election):
         institute, label = _text(r[c_inst]), _text(r[c_date])
         if not institute or r[c_inst].name == "th" or NOT_A_POLL.search(institute) or NOT_A_POLL.search(label):
             continue
+        # 'IBRiS / Onet' : l'institut d'abord, puis le média qui l'a commandé ou publié.
+        institute, _, media = (part.strip() for part in institute.partition("/"))
         results = []
         for i, name in cands.items():
             if r[i] is r[c_inst] or r[i] is r[c_date]:
@@ -405,7 +409,7 @@ def _parse_table_intl(table, headings, page_url, election):
         key = id(r[c_inst])
         seen[key] = seen.get(key, 0) + 1
         polls.append({
-            "round": round_, "section": section, "institute": institute, "notice_url": None,
+            "round": round_, "section": section, "institute": institute, "media": media or None, "notice_url": None,
             "fieldwork_label": label, "fieldwork_end": end,
             "sample_size": sample, "scenario": seen[key], "source": page_url, "results": results,
         })
@@ -451,9 +455,9 @@ def collect(con, election_ids=None):
         con.execute("DELETE FROM polls WHERE election_id = ? AND source = ?", (eid, page_url))
         for p in polls:
             cur = con.execute(
-                "INSERT INTO polls (election_id, round, section, institute, notice_url, fieldwork_label, "
-                "fieldwork_end, sample_size, scenario, source) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                (eid, p["round"], p["section"], p["institute"], p["notice_url"], p["fieldwork_label"],
+                "INSERT INTO polls (election_id, round, section, institute, media, notice_url, fieldwork_label, "
+                "fieldwork_end, sample_size, scenario, source) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                (eid, p["round"], p["section"], p["institute"], p.get("media"), p["notice_url"], p["fieldwork_label"],
                  p["fieldwork_end"], p["sample_size"], p["scenario"], p["source"]),
             )
             poll_id = cur.fetchone()["id"]
