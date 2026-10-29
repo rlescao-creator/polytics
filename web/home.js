@@ -312,8 +312,8 @@ function renderNight(m, night, name) {
     }
     const local = series.filter((s) => s !== 'national');
     if (local.length) {
-      n.append('En pointillé, ' + local.map((s) => 'le marché « ' + s + ' » (' + usd(volume.get(s)) + ' échangés)').join(', ')
-        + ' : avec si peu d’argent, un seul gros ordre suffit à faire passer la cote de 0 à 100 %. Le marché national, lui, a brassé ',
+      n.append('En pointillé, ' + local.map((s) => 'le marché « ' + s + ' », ' + usd(volume.get(s)) + ' échangés').join(', ')
+        + '\u00a0; le marché national en a brassé ',
         el('b', '', usd(volume.get('national'))), '.');
     }
   }

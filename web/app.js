@@ -702,7 +702,7 @@ function renderNight() {
   });
   $('n-night').textContent = 'Cote de chaque finaliste toutes les 10 minutes, heure de Paris, du jour du vote au lendemain. '
     + volumes.map(([serie, v]) => (serie === 'national' ? 'Marché national' : 'Marché « ' + serie + ' » (pointillé)') + '\u00a0: ' + usd(v) + ' échangés').join(' · ')
-    + (volumes.length > 1 ? '. Sur un petit marché, un seul gros ordre suffit à faire passer la cote de 0 à 100 %.' : '.');
+    + '.';
   lineChart($('chart-night'), {
     series, color: (c) => colorOf(c.split(' · ')[0]), dashed: (d) => d.local, focusable: false, yDomain: [0, 100], ruleY: 50,
     yLabel: '↑ chance de victoire', curve: 'step-after', xFormat: (d) => hour.format(d), ticks: 8,
