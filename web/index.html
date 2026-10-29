@@ -45,19 +45,29 @@
     <section class="block countdown" aria-labelledby="t-countdown" id="sec-countdown" hidden>
       <div class="block-head">
         <p class="kicker">Présidentielle française 2027</p>
-        <h2 id="t-countdown">À ce stade, qui avait raison ?</h2>
+        <h2 id="t-countdown">À ce stade des campagnes passées, le favori a-t-il gagné ?</h2>
       </div>
       <div class="cd-top">
-        <span class="cd-j" id="cd-j">J-</span>
-        <span class="cd-sub" id="cd-sub"></span>
+        <div class="cd-when">
+          <span class="cd-j" id="cd-j">J-</span>
+          <span class="cd-sub" id="cd-sub"></span>
+        </div>
+        <div class="cd-score" aria-live="polite">
+          <div class="cd-team polls"><span class="cd-team-name">La rue</span><span class="cd-rate" id="cd-rate-polls">–</span></div>
+          <div class="cd-team market"><span class="cd-team-name">L’argent</span><span class="cd-rate" id="cd-rate-market">–</span></div>
+        </div>
       </div>
-      <p class="deck" id="cd-deck"></p>
-      <figure class="chart" id="chart-countdown"></figure>
+      <p class="cd-now" id="cd-now"></p>
+      <figure class="chart chart-cd" id="chart-countdown"></figure>
       <label class="cd-slider">
-        <span>Revenir à un autre moment de la campagne</span>
-        <input type="range" id="cd-range" min="1" max="365" step="1">
+        <input type="range" id="cd-range" min="1" max="365" step="1" aria-label="Jours avant le vote">
         <output id="cd-out" for="cd-range"></output>
       </label>
+      <div class="legend cd-legend" aria-hidden="true">
+        <span><i class="swatch polls"></i>La rue : % d’intentions de vote du candidat en tête</span>
+        <span><i class="swatch market"></i>L’argent : % de chances du favori</span>
+        <span>✓ a gagné · ✗ a perdu</span>
+      </div>
       <ol class="cd-grid" id="cd-grid"></ol>
     </section>
 
@@ -79,7 +89,7 @@
       <div class="block-head">
         <p class="kicker">Feuille de match</p>
         <h2 id="t-sheet">La veille du vote, quelle chance donnaient-ils au futur vainqueur ?</h2>
-        <p class="note">Les points : la chance donnée au vainqueur la veille du vote ; à droite du trait des 50 %, le favori était le bon. La colonne de droite compte toute la campagne, jour par jour : c’est elle qui fait le score. Cliquez sur une élection pour l’ouvrir.</p>
+        <p class="note">Chance donnée au futur vainqueur la veille du vote. À droite du trait : le bon favori.</p>
       </div>
       <div class="legend" aria-hidden="true">
         <span><i class="swatch polls"></i>La rue (sondages)</span>
@@ -103,7 +113,7 @@
       <div class="block-head">
         <p class="kicker">Classement</p>
         <h2 id="t-sources">Qui voit le vainqueur en premier ?</h2>
-        <p class="note">Jours d’avance en moyenne : depuis quand chaque source plaçait le futur vainqueur devant, sans plus changer d’avis jusqu’au vote (0 quand elle ne l’a jamais vu). Instituts présents dans au moins 2 élections.</p>
+        <p class="note">Depuis combien de jours, en moyenne, chaque source plaçait le futur vainqueur devant.</p>
       </div>
       <ol class="first ranking" id="ranking"></ol>
     </section>

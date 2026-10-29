@@ -96,24 +96,49 @@
 .night[hidden] { display: none; }
 .night h3 { margin: 0; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 19px; text-transform: uppercase; }
 
-/* Compte à rebours 2027 */
+/* Compte à rebours 2027 : un nombre, deux scores, une courbe, des fiches à barres */
 .countdown[hidden] { display: none; }
-.cd-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-.cd-j { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: clamp(72px, 16vw, 160px); line-height: .85; letter-spacing: -.02em; }
-.cd-sub { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
-.cd-slider { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cd-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px 32px; flex-wrap: wrap; }
+.cd-when { display: flex; flex-direction: column; }
+.cd-j { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: clamp(80px, 17vw, 168px); line-height: .82; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.cd-sub { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 6px; }
+.cd-score { display: flex; gap: clamp(20px, 5vw, 56px); }
+.cd-team { display: flex; flex-direction: column; align-items: flex-end; }
+.cd-team-name { font-family: var(--display); font-stretch: 75%; font-weight: 900; font-size: 18px; text-transform: uppercase; }
+.cd-rate { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: clamp(56px, 10vw, 104px); line-height: .85; font-variant-numeric: tabular-nums; }
+.cd-team.polls { color: var(--polls); } .cd-team.market { color: var(--market); }
+.cd-now { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: 15px; font-weight: 600; }
+.cd-now-label { font-family: var(--display); font-weight: 800; font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  background: var(--fg); color: var(--bg); padding: 2px 7px; margin-right: 6px; }
+.chart-cd { min-height: 0; }
+.cd-slider { display: grid; grid-template-columns: minmax(0, 1fr) 7.5em; align-items: center; gap: 12px; margin-top: -8px; }
 .cd-slider input { width: 100%; accent-color: var(--fg); }
-.cd-slider output { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 16px; color: var(--fg); white-space: nowrap; }
-@media (max-width: 640px) { .cd-slider { grid-template-columns: 1fr auto; } .cd-slider > span { grid-column: 1 / -1; } }
-.cd-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0 24px; }
-.cd-card { border-top: 1px solid var(--fg); padding: 8px 0 12px; display: flex; flex-direction: column; gap: 4px; }
-.cd-head { display: flex; flex-direction: column; margin-bottom: 2px; }
-.cd-line { display: grid; grid-template-columns: 5.2em minmax(0, 1fr) 1.2em; gap: 8px; align-items: baseline; font-size: 13px; }
-.cd-camp { font-family: var(--display); font-stretch: 85%; font-weight: 800; text-transform: uppercase; font-size: 12px; }
-.cd-line.polls .cd-camp { color: var(--polls); } .cd-line.market .cd-camp { color: var(--market); }
-.cd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cd-mark { font-weight: 900; text-align: right; }
-.cd-line.right .cd-mark { color: var(--fg); }
-.cd-line.wrong .cd-name { text-decoration: line-through; text-decoration-color: var(--faint); color: var(--muted); }
-.cd-line.wrong .cd-mark { color: var(--muted); }
-.cd-line.none .cd-name { color: var(--faint); font-style: italic; }
+.cd-slider output { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; text-transform: uppercase; text-align: right; }
+.cd-legend { font-weight: 500; }
+.cd-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 24px; }
+.cd-card { border-top: 2px solid var(--fg); padding: 8px 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.cd-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cd-card .country { font-size: 18px; }
+.cd-winner { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-row { display: grid; grid-template-columns: minmax(0, 1fr) 2.8em 1em; grid-template-rows: auto 6px; column-gap: 8px; row-gap: 2px; align-items: center; }
+.cd-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-bar { grid-column: 1 / 2; grid-row: 2; height: 6px; background: var(--track); position: relative; }
+.cd-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.cd-row.polls .cd-bar i { background: var(--polls); } .cd-row.market .cd-bar i { background: var(--market); }
+.cd-v { grid-column: 2; grid-row: 1 / 3; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; }
+.cd-row.polls .cd-v { color: var(--polls); } .cd-row.market .cd-v { color: var(--market); }
+.cd-mark { grid-column: 3; grid-row: 1 / 3; font-weight: 900; font-size: 15px; text-align: center; }
+.cd-row.wrong .cd-name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.cd-row.wrong .cd-bar i { opacity: .35; }
+.cd-row.wrong .cd-mark { color: var(--muted); }
+.cd-row.none .cd-name { color: var(--faint); }
+.cd-card.empty { opacity: .45; }
+.cd-card.empty .cd-row { display: none; }
+.cd-card.empty .cd-card-head::after { content: "pas encore de données"; font-size: 11px; color: var(--muted); }
+.cd-card.empty .cd-winner { display: none; }
+@media (max-width: 640px) {
+  .cd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
+  .cd-card .country { font-size: 15px; }
+  .cd-card-head { flex-direction: column; gap: 0; }
+  .cd-v { font-size: 14px; }
+}
