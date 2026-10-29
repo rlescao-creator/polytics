@@ -106,7 +106,11 @@ les couleurs de la table `parties`, et les « candidats en tête » sont calcul�
 
 `web/` (sans compilation, bibliothèques chargées depuis jsDelivr) :
 
-- `index.html` + `app.js` + `style.css` : une page par élection (`?e=br-2026`, `&tour=1|2`), 2027 par défaut,
+- `index.html` + `home.js` + `home.css` : accueil « le match », sondages contre Polymarket sur toutes les
+  présidentielles passées. Score : le camp au plus petit score de Brier sur la campagne (même calcul que
+  `bilan_previsions`, lu dans `bilan_quotidien`) ; feuille de match (chance donnée au vainqueur la veille) ;
+  dernier match ; 2027 en direct ; classement « qui voit le vainqueur en premier » (agrégat de `bilan_premier_a_voir`).
+- `election.html` + `app.js` : une page par élection (`?e=br-2026`, `&tour=1|2`), 2027 par défaut,
   sélecteur de pays en haut. Moyenne des sondages (un sondage compte une fois, ses hypothèses moyennées ;
   30 jours, 3 sondages minimum) à côté de la cote Polymarket, chacune sur sa propre échelle ; courbes avec
   Observable Plot (moyenne des 5 derniers sondages sur 90 jours au plus) ; derniers sondages avec
@@ -116,6 +120,7 @@ les couleurs de la table `parties`, et les « candidats en tête » sont calcul�
   `bilan_premier_a_voir` et `bilan_quotidien` (sinon calculés à la volée, souvent au-delà des 3 s permises).
 - `suivi.html` + `suivi.js` : « Mon suivi », connexion par e-mail (Supabase Auth) et favoris par utilisateur.
 
+`style.css` porte la direction artistique commune (papier, encre ; vermillon = sondages, outremer = marché).
 `web/config.js` contient l'adresse du projet et sa clé publique (prévue pour le navigateur).
 
 ```bash

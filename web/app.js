@@ -12,7 +12,6 @@ const LOOKBACK = 90;    // ancienneté maximale d'un sondage dans la courbe, en 
 const HISTORY = 365;    // jours affichés sur les graphiques
 const SHOWN = 7;        // candidats tracés
 const DAY = 86400000;
-const POLLS_COLOR = '#d97706';
 
 const $ = (id) => document.getElementById(id);
 const pct = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -24,7 +23,6 @@ const relative = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' });
 const region = new Intl.DisplayNames(['fr'], { type: 'region' });
 const ordinal = (n) => (n === 1 ? '1er' : n + 'e');
 const roundName = (r) => (r === 1 ? '1er tour' : '2nd tour');
-const flag = (cc) => String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 const yearOf = (e) => e.id.split('-')[1];
 const titleOf = (e) => region.of(e.country) + ' ' + yearOf(e);
 const utc = (iso) => new Date(iso + 'T00:00:00Z');
@@ -120,7 +118,7 @@ function renderPicker() {
     const a = el('a', 'chip');
     a.href = '?e=' + e.id;
     if (e.id === state.id) a.setAttribute('aria-current', 'page');
-    a.append(el('span', 'flag', flag(e.country)), el('span', '', titleOf(e)));
+    a.append(el('span', '', region.of(e.country)), el('span', 'year', yearOf(e)));
     if (!e.past) a.append(el('span', 'live', 'en direct'));
     a.addEventListener('click', (ev) => {
       if (ev.metaKey || ev.ctrlKey || ev.shiftKey) return;
@@ -299,6 +297,7 @@ async function show() {
   const e = elections.find((x) => x.id === state.id);
   const mine = ++token;
   document.title = 'Présidentielle · ' + titleOf(e) + ' · Polytics';
+  $('nav-live').toggleAttribute('aria-current', e.id === DEFAULT_ELECTION);
   $('updated').textContent = 'Présidentielle · ' + titleOf(e);
   $('headline').textContent = ' ';
   $('sec-first').hidden = $('sec-duel').hidden = !e.past;
@@ -530,7 +529,7 @@ function renderFirst() {
   if (!rows.length) { list.append(el('li', 'empty', 'Pas assez de données.')); return; }
   const max = Math.max(...rows.map((r) => r.jours_avance ?? 0), 1);
   rows.forEach((r) => {
-    const li = el('li', 'src' + (r.genre !== 'institut' ? ' key' : '') + (r.jours_avance == null ? ' never' : ''));
+    const li = el('li', 'src' + (r.genre === 'marché' ? ' market' : r.genre === 'moyenne' ? ' polls' : '') + (r.jours_avance == null ? ' never' : ''));
     const name = el('span', 'src-name', r.source);
     name.append(el('small', '', r.genre === 'institut' ? r.nb + ' sondages' : r.genre === 'marché' ? 'marché' : 'tous instituts'));
     const track = el('div', 'track');
@@ -660,7 +659,7 @@ function renderCharts() {
     return;
   }
   lineChart($('chart-duel'), {
-    series: [pm, sd].filter((s) => s.length), color: (c) => (c === 'Polymarket' ? 'var(--fg)' : POLLS_COLOR),
+    series: [pm, sd].filter((s) => s.length), color: (c) => (c === 'Polymarket' ? 'var(--market)' : 'var(--polls)'),
     yDomain: [0, 100], ruleY: 50, focusable: false, yLabel: '↑ chance de victoire', rules: [{ date: e.end, label: 'Vote' }],
     xDomain: [d3.min([...pm, ...sd], (d) => d.date), new Date(+e.end + 7 * DAY)],
     tip: (d) => d.candidate + ' : ' + pct.format(d.value) + ' %\n' + longDay.format(d.date),

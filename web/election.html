@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polytics</title>
+  <meta name="description" content="Présidentielles : moyenne des sondages et cotes Polymarket côte à côte, et pour les élections passées, qui avait vu le vainqueur en premier.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header class="mast">
+      <a class="brand" href="./">Polytics</a>
+      <nav aria-label="Sections">
+        <a href="./">Le match</a>
+        <a href="election.html" class="live" id="nav-live">2027 en direct</a>
+        <a href="suivi.html">Mon suivi</a>
+      </nav>
+    </header>
+
+    <nav class="picker" id="picker" aria-label="Élections"></nav>
+
+    <header class="hero">
+      <p class="eyebrow" id="updated">Chargement…</p>
+      <h1 id="headline">&nbsp;</h1>
+      <p class="lede" id="lede"></p>
+      <div class="rounds" id="rounds" role="group" aria-label="Tour" hidden></div>
+    </header>
+
+    <section class="block" aria-labelledby="t-now">
+      <div class="block-head">
+        <h2 id="t-now">Deux mesures, deux échelles</h2>
+        <p class="note" id="n-now"></p>
+      </div>
+      <div class="board" id="board" role="table" aria-label="Candidats : sondages et Polymarket"></div>
+      <p class="hint">Cliquez sur un candidat pour le suivre dans les graphiques.</p>
+    </section>
+
+    <section class="block" aria-labelledby="t-first" id="sec-first" hidden>
+      <div class="block-head">
+        <h2 id="t-first">Qui l'a vu en premier ?</h2>
+        <p class="note" id="n-first"></p>
+      </div>
+      <ol class="first" id="first"></ol>
+    </section>
+
+    <section class="block" aria-labelledby="t-duel" id="sec-duel" hidden>
+      <div class="block-head">
+        <h2 id="t-duel">Chance de victoire, jour par jour</h2>
+        <p class="note">Polymarket : prix de la part « Oui ». Sondages : l'écart moyen entre les deux finalistes, converti en probabilité avec une erreur type de 3,5 points.</p>
+      </div>
+      <figure class="chart" id="chart-duel"></figure>
+    </section>
+
+    <section class="block" aria-labelledby="t-polls">
+      <div class="block-head">
+        <h2 id="t-polls">Intentions de vote</h2>
+        <p class="note" id="n-polls"></p>
+      </div>
+      <figure class="chart" id="chart-polls"></figure>
+    </section>
+
+    <section class="block" aria-labelledby="t-market">
+      <div class="block-head">
+        <h2 id="t-market">Chance de victoire selon Polymarket</h2>
+        <p class="note">Dernier prix de la journée de la part « Oui » sur chaque candidat, lu comme une probabilité.</p>
+      </div>
+      <figure class="chart" id="chart-market"></figure>
+    </section>
+
+    <section class="block" aria-labelledby="t-latest">
+      <div class="block-head">
+        <h2 id="t-latest">Derniers sondages</h2>
+        <p class="note">Quand un institut teste plusieurs hypothèses de candidatures, on fait la moyenne des hypothèses où le candidat figure.</p>
+      </div>
+      <ol class="latest" id="latest"></ol>
+    </section>
+
+    <footer class="method">
+      <h2>Méthode et sources</h2>
+      <p><b>Sondages</b> : <a id="src-wiki" href="https://fr.wikipedia.org/">listes de Wikipedia</a> (licence CC BY-SA)<span id="src-cs">, commanditaires lus dans les notices de la <a href="https://www.commission-des-sondages.fr/">Commission des sondages</a></span>. Un sondage compte une fois, quel que soit son nombre d'hypothèses. La moyenne d'un candidat n'est calculée qu'à partir de 3 sondages sur 30 jours.</p>
+      <p><b>Élections passées</b> : sondages et résultat sont comparés sur la même base, la part des voix entre les candidats du résultat (indécis et petits candidats exclus). Seuls comptent les sondages qui testent tous ces candidats.</p>
+      <p><b>Marché</b> : <a href="https://polymarket.com/">Polymarket</a>, marché sur le vainqueur de l'élection. Polymarket est bloqué en France par l'ANJ ; les cotes sont relevées depuis l'étranger. Une cote reflète ce que parient quelques milliers de personnes, pas une intention de vote.</p>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

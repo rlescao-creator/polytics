@@ -3,89 +3,92 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Polytics</title>
-  <meta name="description" content="Présidentielles : moyenne des sondages et cotes Polymarket côte à côte, et pour les élections passées, qui avait vu le vainqueur en premier.">
+  <title>Polytics · Sondages contre marché</title>
+  <meta name="description" content="Sur chaque présidentielle depuis 2023, qui a le mieux prévu le vainqueur : les sondages ou Polymarket ?">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="home.css">
 </head>
 <body>
   <main>
-    <nav class="top">
-      <span class="brand">Polytics</span>
-      <a href="suivi.html">Mon suivi</a>
-    </nav>
-
-    <nav class="picker" id="picker" aria-label="Élections"></nav>
-
-    <header class="hero">
-      <p class="eyebrow" id="updated">Chargement…</p>
-      <h1 id="headline">&nbsp;</h1>
-      <p class="lede" id="lede"></p>
-      <div class="rounds" id="rounds" role="group" aria-label="Tour" hidden></div>
+    <header class="mast">
+      <a class="brand" href="./" aria-current="page">Polytics</a>
+      <nav aria-label="Sections">
+        <a href="./" aria-current="page">Le match</a>
+        <a href="election.html" class="live">2027 en direct</a>
+        <a href="suivi.html">Mon suivi</a>
+      </nav>
     </header>
 
-    <section class="block" aria-labelledby="t-now">
-      <div class="block-head">
-        <h2 id="t-now">Deux mesures, deux échelles</h2>
-        <p class="note" id="n-now"></p>
+    <section class="score" aria-labelledby="t-score">
+      <p class="kicker" id="score-kicker">Le match</p>
+      <h1 id="t-score" class="sr-only">Sondages contre marché</h1>
+      <div class="board-score" id="board-score" aria-live="polite">
+        <div class="team polls"><span class="team-name">Sondages</span><span class="team-n" id="n-polls">–</span></div>
+        <span class="dash" aria-hidden="true">–</span>
+        <div class="team market"><span class="team-name">Marché</span><span class="team-n" id="n-market">–</span></div>
       </div>
-      <div class="board" id="board" role="table" aria-label="Candidats : sondages et Polymarket"></div>
-      <p class="hint">Cliquez sur un candidat pour le suivre dans les graphiques.</p>
+      <p class="deck" id="deck"><span class="skel skel-text"></span></p>
     </section>
 
-    <section class="block" aria-labelledby="t-first" id="sec-first" hidden>
+    <section class="block" aria-labelledby="t-last" id="sec-last">
       <div class="block-head">
-        <h2 id="t-first">Qui l'a vu en premier ?</h2>
-        <p class="note" id="n-first"></p>
+        <p class="kicker">Dernier match</p>
+        <h2 id="t-last">&nbsp;</h2>
+        <p class="note" id="n-last"></p>
       </div>
-      <ol class="first" id="first"></ol>
+      <figure class="chart" id="chart-last"><div class="skel skel-chart"></div></figure>
     </section>
 
-    <section class="block" aria-labelledby="t-duel" id="sec-duel" hidden>
+    <section class="block" aria-labelledby="t-sheet">
       <div class="block-head">
-        <h2 id="t-duel">Chance de victoire, jour par jour</h2>
-        <p class="note">Polymarket : prix de la part « Oui ». Sondages : l'écart moyen entre les deux finalistes, converti en probabilité avec une erreur type de 3,5 points.</p>
+        <p class="kicker">Feuille de match</p>
+        <h2 id="t-sheet">La veille du vote, quelle chance donnaient-ils au futur vainqueur ?</h2>
+        <p class="note">Les points : la chance donnée au vainqueur la veille du vote ; à droite du trait des 50 %, le favori était le bon. La colonne de droite compte toute la campagne, jour par jour : c’est elle qui fait le score. Cliquez sur une élection pour l’ouvrir.</p>
       </div>
-      <figure class="chart" id="chart-duel"></figure>
+      <div class="legend" aria-hidden="true">
+        <span><i class="swatch polls"></i>Sondages</span>
+        <span><i class="swatch market"></i>Polymarket</span>
+        <span class="legend-zone">Zone grisée : bon favori</span>
+      </div>
+      <ol class="sheet" id="sheet"></ol>
     </section>
 
-    <section class="block" aria-labelledby="t-polls">
+    <section class="block live-band" aria-labelledby="t-live">
       <div class="block-head">
-        <h2 id="t-polls">Intentions de vote</h2>
-        <p class="note" id="n-polls"></p>
+        <p class="kicker"><span class="live-dot"></span>Prochain match</p>
+        <h2 id="t-live">France 2027</h2>
+        <p class="note" id="n-live"></p>
       </div>
-      <figure class="chart" id="chart-polls"></figure>
+      <div class="live-cols" id="live-cols"></div>
+      <a class="more" href="election.html">Suivre 2027 →</a>
     </section>
 
-    <section class="block" aria-labelledby="t-market">
+    <section class="block" aria-labelledby="t-sources">
       <div class="block-head">
-        <h2 id="t-market">Chance de victoire selon Polymarket</h2>
-        <p class="note">Dernier prix de la journée de la part « Oui » sur chaque candidat, lu comme une probabilité.</p>
+        <p class="kicker">Classement</p>
+        <h2 id="t-sources">Qui voit le vainqueur en premier ?</h2>
+        <p class="note">Jours d’avance en moyenne : depuis quand chaque source plaçait le futur vainqueur devant, sans plus changer d’avis jusqu’au vote (0 quand elle ne l’a jamais vu). Instituts présents dans au moins 2 élections.</p>
       </div>
-      <figure class="chart" id="chart-market"></figure>
-    </section>
-
-    <section class="block" aria-labelledby="t-latest">
-      <div class="block-head">
-        <h2 id="t-latest">Derniers sondages</h2>
-        <p class="note">Quand un institut teste plusieurs hypothèses de candidatures, on fait la moyenne des hypothèses où le candidat figure.</p>
-      </div>
-      <ol class="latest" id="latest"></ol>
+      <ol class="first ranking" id="ranking"></ol>
     </section>
 
     <footer class="method">
-      <h2>Méthode et sources</h2>
-      <p><b>Sondages</b> : <a id="src-wiki" href="https://fr.wikipedia.org/">listes de Wikipedia</a> (licence CC BY-SA)<span id="src-cs">, commanditaires lus dans les notices de la <a href="https://www.commission-des-sondages.fr/">Commission des sondages</a></span>. Un sondage compte une fois, quel que soit son nombre d'hypothèses. La moyenne d'un candidat n'est calculée qu'à partir de 3 sondages sur 30 jours.</p>
-      <p><b>Élections passées</b> : sondages et résultat sont comparés sur la même base, la part des voix entre les candidats du résultat (indécis et petits candidats exclus). Seuls comptent les sondages qui testent tous ces candidats.</p>
-      <p><b>Marché</b> : <a href="https://polymarket.com/">Polymarket</a>, marché sur le vainqueur de l'élection. Polymarket est bloqué en France par l'ANJ ; les cotes sont relevées depuis l'étranger. Une cote reflète ce que parient quelques milliers de personnes, pas une intention de vote.</p>
+      <h2>Comment on compte</h2>
+      <p><b>Le score</b> : pour chaque élection, l’erreur moyenne de chaque camp sur toute la campagne, jour par jour (score de Brier : l’écart au carré entre la chance donnée au vainqueur et 100 %). Le camp qui se trompe le moins gagne l’élection.</p>
+      <p><b>Les sondages en probabilité</b> : l’écart moyen entre les deux finalistes dans les sondages de la dernière semaine connue, converti en chance de victoire avec une erreur type de 3,5 points. Polymarket : prix de la part « Oui ».</p>
+      <p><b>Prudence</b> : <span id="caution">quelques élections, c’est peu</span>. Un score n’est pas une loi, et un camp peut gagner le match en se trompant de favori la veille.</p>
+      <p><b>Sources</b> : sondages des listes de Wikipedia (CC BY-SA), cotes Polymarket, résultats officiels. Polymarket est bloqué en France par l’ANJ ; les cotes sont relevées depuis l’étranger.</p>
     </footer>
   </main>
+
+  <div class="tip" id="tip" role="tooltip" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"></script>
   <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>
