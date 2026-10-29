@@ -109,6 +109,15 @@ async function load() {
 
   const counted = matches.filter((m) => !m.excluded);
 
+  // Chance que Polymarket donnait, la veille, au finaliste battu (pour le penchant gauche-droite du marché).
+  const eves = [...new Set(matches.map((m) => isoDay(new Date(+m.vote - DAY))))];
+  const losers = eves.length ? await all(() => db.from('bilan_quotidien').select('election_id, jour, polymarket')
+    .eq('gagnant', false).in('jour', eves).order('election_id')) : [];
+  matches.forEach((m) => {
+    const row = losers.find((r) => r.election_id === m.id && r.jour === isoDay(new Date(+m.vote - DAY)));
+    m.eveLoserMarket = row && row.polymarket != null ? +row.polymarket : null;
+  });
+
   // Nuit du vote de la dernière élection (table absente ou vide : pas de graphique).
   const night = matches[0]
     ? await all(() => db.from('nuit_electorale').select('serie, candidat, volume, ts, price').eq('election_id', matches[0].id).order('ts'))
@@ -392,41 +401,85 @@ function renderCountdown(data) {
   new ResizeObserver(() => { if (target.clientWidth !== w) { w = target.clientWidth; draw(); } }).observe(target);
 }
 
-// --- Gauche ou droite : écart des sondages, la veille, sur le candidat le plus à droite du duel final.
+// --- Gauche ou droite, pour le candidat le plus à droite de chaque duel final.
+// Médias : écart, la veille, entre la part que lui donnaient les sondages et son résultat (sur les deux finalistes).
+// Polymarket : chance qu'il lui donnait la veille, à comparer au nombre de fois où il a gagné.
 function renderLean({ counted, matches }) {
   $('caution').textContent = counted.length + ' élections';
   const out = matches.filter((m) => m.excluded);
   $('excluded-note').textContent = out.length
     ? out.map((m) => m.country + ' ' + m.year).join(', ') + ' écarté' + (out.length > 1 ? 's' : '') + ' des totaux'
     : 'aucune élection écartée';
-  const lean = counted.filter((m) => plusADroite[m.id] && m.evePart != null && m.result2 != null).map((m) => {
-    const gap = m.evePart - m.result2;   // écart sur le vainqueur
-    return { m, gap: plusADroite[m.id] === m.winner ? gap : -gap };
-  }).sort((a, b) => a.gap - b.gap);
-  if (!lean.length) return;
+  const right = counted.filter((m) => plusADroite[m.id]).map((m) => {
+    const won = plusADroite[m.id] === m.winner;
+    const gap = m.evePart != null && m.result2 != null ? (won ? 1 : -1) * (m.evePart - m.result2) : null;
+    const chance = won ? m.eveMarket : m.eveLoserMarket;
+    return { m, name: plusADroite[m.id], won, gap, chance };
+  });
+  const polls = right.filter((r) => r.gap != null).sort((a, b) => a.gap - b.gap);
+  const market = right.filter((r) => r.chance != null).sort((a, b) => b.chance - a.chance);
+  if (!polls.length && !market.length) return;
   $('sec-lean').hidden = false;
-  const med = median(lean.map((l) => l.gap));
-  const over = lean.filter((l) => l.gap > 0.5).length;
-  const under = lean.filter((l) => l.gap < -0.5).length;
-  $('t-lean').textContent = Math.abs(med) < 1 ? 'Les sondages ne penchent ni à gauche ni à droite'
-    : med > 0 ? 'Les sondages surestiment la droite' : 'Les sondages sous-estiment la droite';
-  $('n-lean').textContent = 'Candidat le plus à droite : sous-estimé ' + under + ' fois, surestimé ' + over + ' fois · écart médian ' + signed1(med) + ' point.';
+
+  // Verdicts : médias selon l'écart médian, Polymarket selon chance moyenne contre victoires réelles.
+  const med = polls.length ? median(polls.map((l) => l.gap)) : 0;
+  const pollsSays = Math.abs(med) < 1 ? 'les sondages ne penchent pas' : med > 0 ? 'les sondages surestiment la droite' : 'les sondages sous-estiment la droite';
+  const avgChance = market.length ? mean(market.map((r) => r.chance)) : 0;
+  const winRate = market.length ? 100 * market.filter((r) => r.won).length / market.length : 0;
+  const diff = winRate - avgChance;
+  const marketSays = Math.abs(diff) < 10 ? 'Polymarket non plus' : diff > 0 ? 'Polymarket sous-estime la droite' : 'Polymarket surestime la droite';
+  $('t-lean').textContent = pollsSays.charAt(0).toUpperCase() + pollsSays.slice(1) + ', ' + marketSays;
+  $('n-lean').textContent = 'Le candidat le plus à droite du duel final, élection par élection.';
+
   const box = $('lean');
   box.replaceChildren();
-  const scale = Math.max(5, Math.ceil(Math.max(...lean.map((l) => Math.abs(l.gap)))));
-  const list = el('ol', 'lean-list');
-  lean.forEach((l) => {
-    const li = el('li');
-    const track = el('span', 'lean-track');
-    const bar = el('i', l.gap >= 0 ? 'pos' : 'neg');
-    bar.style.width = (50 * Math.abs(l.gap) / scale) + '%';
-    track.append(bar);
-    li.append(el('span', 'lean-name', l.m.country + ' · ' + plusADroite[l.m.id]), track, el('span', 'lean-v', signed1(l.gap)));
-    list.append(li);
-  });
-  const axis = el('div', 'lean-axis');
-  axis.append(el('span', '', '← sous-estimée'), el('span', '', 'surestimée →'));
-  box.append(list, axis);
+  const column = (camp, title, sub) => {
+    const col = el('div', 'lean-col ' + camp);
+    col.append(el('h3', '', title), el('p', 'lean-sub', sub));
+    box.append(col);
+    return col;
+  };
+
+  if (polls.length) {
+    const over = polls.filter((l) => l.gap > 0.5).length;
+    const under = polls.filter((l) => l.gap < -0.5).length;
+    const col = column('polls', 'Médias', 'Sous-estimé ' + under + ' fois, surestimé ' + over + ' fois · écart médian ' + signed1(med) + ' point');
+    const scale = Math.max(5, Math.ceil(Math.max(...polls.map((l) => Math.abs(l.gap)))));
+    const list = el('ol', 'lean-list');
+    polls.forEach((l) => {
+      const li = el('li');
+      const track = el('span', 'lean-track');
+      const bar = el('i', l.gap >= 0 ? 'pos' : 'neg');
+      bar.style.width = (50 * Math.abs(l.gap) / scale) + '%';
+      track.append(bar);
+      li.append(el('span', 'lean-name', l.m.country + ' · ' + l.name), track, el('span', 'lean-v', signed1(l.gap)));
+      list.append(li);
+    });
+    const axis = el('div', 'lean-axis');
+    axis.append(el('span', '', '← sous-estimé'), el('span', '', 'surestimé →'));
+    col.append(list, axis);
+  }
+
+  if (market.length) {
+    const wins = market.filter((r) => r.won).length;
+    const col = column('market', 'Polymarket', 'Chance moyenne donnée la veille : ' + pct0.format(avgChance) + ' % · a gagné ' + wins + ' fois sur ' + market.length
+      + ' (' + pct0.format(winRate) + ' %)');
+    const list = el('ol', 'lean-list chance');
+    market.forEach((r) => {
+      const li = el('li', r.won ? 'won' : 'lost');
+      const track = el('span', 'lean-track');
+      const bar = el('i');
+      bar.style.width = Math.max(0.6, r.chance) + '%';
+      track.append(bar);
+      li.append(el('span', 'lean-name', r.m.country + ' · ' + r.name), track,
+        el('span', 'lean-v', pct0.format(r.chance) + ' % ' + (r.won ? '✓' : '✗')));
+      li.title = r.name + (r.won ? ' a gagné' : ' a perdu');
+      list.append(li);
+    });
+    const axis = el('div', 'lean-axis');
+    axis.append(el('span', '', '0 %'), el('span', '', '50 %'), el('span', '', '100 %'));
+    col.append(list, axis);
+  }
 }
 
 load().then((data) => {

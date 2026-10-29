@@ -15,6 +15,7 @@ const DAY = 86400000;
 
 const $ = (id) => document.getElementById(id);
 const pct = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const pct0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const signed = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' });
 const longDay = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const month = new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: 'UTC' });
@@ -446,10 +447,10 @@ function renderBoard() {
   board.replaceChildren();
   const note = $('n-now');
   note.replaceChildren();
+  board.className = 'board' + (st.hasResult ? ' split' : '');
   if (st.hasResult) {
-    $('t-now').textContent = 'Résultat, sondages et marché';
-    note.append('Barre : ', el('b', '', 'résultat'), ' du ' + roundName(round) + '. Trait vertical : ', el('b', '', 'dernière moyenne des sondages'),
-      ', avec la fourchette des sondages. À droite, la ', el('b', '', 'chance de gagner'), ' que donnait Polymarket la veille du vote.');
+    renderSplit(board, note);
+    return;
   } else {
     $('t-now').textContent = 'Deux mesures, deux échelles';
     note.append('Les sondages mesurent des ', el('b', '', 'intentions de vote au ' + roundName(round)), '. Polymarket donne une ',
@@ -509,6 +510,67 @@ function renderBoard() {
     row.append(who, vote, market);
     board.append(row);
   });
+}
+
+// Élection passée : trois barres partagées, l'une sous l'autre (résultat, médias, Polymarket), chaque
+// candidat à la même place et de la même couleur ; à droite, le favori de chaque camp était-il le bon ?
+function renderSplit(board, note) {
+  const { st, round } = view;
+  const rows = st.rows;
+  const winner = rows[0].candidate;
+  $('t-now').textContent = 'Qui mettaient-ils devant ?';
+  note.append('Le ', el('b', '', 'résultat'), (view.e.second_round_date ? ' du ' + roundName(round) : '') + ', puis ce que donnaient les ', el('b', '', 'médias'),
+    ' (derniers sondages) et ', el('b', '', 'Polymarket'), ' (chance de gagner) la veille du vote.');
+
+  // Candidats : pastilles qui servent aussi à suivre un candidat dans les graphiques.
+  const chips = el('div', 'split-chips');
+  rows.forEach((r) => {
+    const b = el('button', 'split-chip' + (state.focus === r.candidate ? ' on' : ''));
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(state.focus === r.candidate));
+    b.title = 'Suivre dans les graphiques';
+    const dot = el('span', 'dot');
+    dot.style.background = colorOf(r.candidate);
+    b.append(dot, fullName(r.candidate));
+    b.addEventListener('click', () => focus(r.candidate));
+    chips.append(b);
+  });
+  board.append(chips);
+
+  const sources = [
+    ['result', 'Résultat', view.e.second_round_date ? roundName(round) : 'le vote', (r) => r.result],
+    ['polls', 'Médias', 'derniers sondages', (r) => r.avg],
+    ['market', 'Polymarket', 'chance de gagner, la veille', (r) => r.proba],
+  ];
+  sources.forEach(([key, label, sub, value]) => {
+    const vals = rows.map((r) => ({ c: r.candidate, v: value(r) })).filter((x) => x.v != null);
+    const line = el('div', 'split-row ' + key);
+    const lab = el('div', 'split-label');
+    lab.append(el('b', '', label), el('small', '', sub));
+    const bar = el('div', 'split-bar' + (rows.length === 2 ? ' duel' : ''));
+    vals.forEach((x) => {
+      const seg = el('span', 'split-seg' + (state.focus && state.focus !== x.c ? ' dim' : ''));
+      seg.style.width = x.v + '%';
+      seg.style.background = colorOf(x.c);
+      seg.title = fullName(x.c) + ' : ' + pct.format(x.v) + ' %';
+      if (x.v >= 14) seg.append(el('span', '', x.c + ' ' + pct0.format(x.v) + ' %'));
+      else if (x.v >= 6) seg.append(el('span', '', pct0.format(x.v)));
+      bar.append(seg);
+    });
+    const verdict = el('div', 'split-verdict');
+    if (!vals.length) verdict.append(el('span', 'none', 'pas de données'));
+    else if (key === 'result') verdict.append(el('span', 'won', '→ ' + fullName(winner)));
+    else {
+      const fav = vals.reduce((a, b) => (b.v > a.v ? b : a)).c;
+      verdict.append(fav === winner ? el('span', 'ok', '✓ bon favori') : el('span', 'ko', '✗ favori : ' + fav));
+    }
+    line.append(lab, bar, verdict);
+    board.append(line);
+  });
+  if (rows.some((r) => Math.abs(r.official - r.result) >= 0.1)) {
+    board.append(el('p', 'split-foot', 'Résultat et sondages en part des voix entre ces candidats. Officiel : '
+      + rows.map((r) => fullName(r.candidate) + ' ' + pct.format(r.official) + ' %').join(', ') + '.'));
+  }
 }
 
 function focus(candidate) {

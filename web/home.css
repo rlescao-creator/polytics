@@ -62,7 +62,16 @@
 }
 
 /* Gauche ou droite */
-.lean { max-width: 720px; }
+.lean { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 40px; }
+@media (max-width: 760px) { .lean { grid-template-columns: minmax(0, 1fr); } }
+.lean-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lean-col h3 { margin: 0; font-family: var(--display); font-stretch: 80%; font-weight: 900; font-size: 20px; text-transform: uppercase; }
+.lean-col.polls h3 { color: var(--polls); } .lean-col.market h3 { color: var(--market); }
+.lean-sub { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.lean-col.polls .lean-track i { background: var(--polls); }
+.lean-list.chance .lean-track i { left: 0; background: var(--market); }
+.lean-list.chance li.lost .lean-track i { opacity: .35; }
+.lean-list.chance li.lost .lean-name { color: var(--muted); }
 .lean-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .lean-list li { display: grid; grid-template-columns: 12em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 12px; }
 .lean-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -84,4 +93,10 @@
 @media (max-width: 640px) {
   .lean-list li { grid-template-columns: 9em minmax(0, 1fr) 2.6em; }
   .lean-axis { margin: 0 calc(2.6em + 8px) 0 calc(9em + 8px); }
+}
+.lean-list.chance li { grid-template-columns: 12em minmax(0, 1fr) 4.6em; }
+.lean-col.market .lean-axis { margin: 0 calc(4.6em + 8px) 0 calc(12em + 8px); }
+@media (max-width: 640px) {
+  .lean-list.chance li { grid-template-columns: 9em minmax(0, 1fr) 4.2em; }
+  .lean-col.market .lean-axis { margin: 0 calc(4.2em + 8px) 0 calc(9em + 8px); }
 }
