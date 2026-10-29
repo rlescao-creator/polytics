@@ -1,22 +1,5 @@
-/* Accueil « le match » */
+/* Accueil « l'argent contre la rue » */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
-/* Tableau de score */
-.score { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
-.board-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: clamp(8px, 3vw, 32px);
-  border-bottom: 3px solid var(--fg); padding-bottom: 8px; }
-.team { display: flex; flex-direction: column; gap: 0; min-width: 0; }
-.team.market { align-items: flex-end; text-align: right; }
-.team-name { font-family: var(--display); font-stretch: 75%; font-weight: 900; text-transform: uppercase; letter-spacing: .02em;
-  font-size: clamp(22px, 4.6vw, 44px); line-height: 1; }
-.team-n { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: clamp(120px, 30vw, 300px); line-height: .78;
-  letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.team.polls .team-name, .team.polls .team-n { color: var(--polls); }
-.team.market .team-name, .team.market .team-n { color: var(--market); }
-.lead-polls .team.market .team-n, .lead-market .team.polls .team-n { opacity: .4; }
-.dash { font-family: var(--display); font-stretch: 62%; font-weight: 400; font-size: clamp(60px, 14vw, 140px); line-height: 1; color: var(--faint); padding-bottom: .1em; }
-.deck { margin: 0; font-family: var(--serif); font-size: clamp(19px, 2.4vw, 24px); line-height: 1.4; max-width: 46ch; }
-.deck b { font-weight: 600; }
 
 /* Légende */
 .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -27,10 +10,9 @@
 
 /* Feuille de match : une ligne par élection, chances de la veille sur 0–100 % */
 .sheet { list-style: none; margin: 0; padding: 0; }
-.sheet-head, .match { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(0, 3fr) 10.5em; gap: 20px; align-items: center; }
+.sheet-head, .match { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr); gap: 20px; align-items: center; }
 .sheet-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
   padding-bottom: 6px; border-bottom: 1px solid var(--fg); }
-.sheet-head .r { text-align: right; }
 .scale { display: flex; justify-content: space-between; }
 .match { padding: 12px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
 .match:hover { background: linear-gradient(90deg, transparent, var(--panel) 10%, var(--panel) 90%, transparent); }
@@ -44,16 +26,11 @@
 .strip .mark { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); }
 .strip .mark.polls { background: var(--polls); }
 .strip .mark.market { background: var(--market); }
-.camp { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
-.camp-name { font-family: var(--display); font-stretch: 80%; font-weight: 900; font-size: 18px; text-transform: uppercase; line-height: 1; }
-.camp.polls .camp-name { color: var(--polls); } .camp.market .camp-name { color: var(--market); }
-.camp-eve { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 640px) {
-  .sheet-head, .match { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .sheet-head, .match { grid-template-columns: minmax(0, 1fr); gap: 6px 12px; }
   .sheet-head > span:first-child { display: none; }
   .sheet-head .scale { grid-column: 1 / -1; order: 2; }
-  .sheet-head .r { display: none; }
   .match .strip { grid-column: 1 / -1; order: 3; }
 }
 
@@ -62,34 +39,6 @@
   background: var(--panel); border: 1px solid var(--fg); padding: 8px 10px; font-size: 13px; box-shadow: 4px 4px 0 var(--fg); }
 .tip[hidden] { display: none; }
 .tip b { font-family: var(--display); font-stretch: 85%; text-transform: uppercase; font-size: 14px; }
-
-/* En direct */
-.live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--polls); margin-right: 8px; animation: pulse 2s infinite; }
-.live-band .kicker::before { display: none; }
-.live-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-@media (max-width: 640px) { .live-cols { grid-template-columns: 1fr; } }
-.live-col h3 { margin: 0; font-family: var(--display); font-stretch: 80%; font-weight: 900; font-size: 22px; text-transform: uppercase; }
-.live-col.polls h3 { color: var(--polls); } .live-col.market h3 { color: var(--market); }
-.live-sub { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-.live-col ol { list-style: none; margin: 0; padding: 0; }
-.live-col li { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 7px 0 9px; border-bottom: 1px solid var(--line); }
-.live-name { font-weight: 600; }
-.live-v { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-variant-numeric: tabular-nums; }
-.live-bar { position: absolute; left: 0; bottom: -1px; height: 3px; }
-.live-col.polls .live-bar { background: var(--polls); } .live-col.market .live-bar { background: var(--market); }
-.more { align-self: flex-start; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 14px;
-  text-decoration: none; border-bottom: 3px solid var(--fg); padding-bottom: 2px; }
-
-.ranking .src { grid-template-columns: minmax(160px, 1.3fr) minmax(0, 3fr) 4em; }
-
-/* L'argent contre la rue : ce que chaque camp met en jeu */
-.team-what { font-family: var(--serif); font-style: italic; font-size: clamp(14px, 1.8vw, 18px); color: var(--muted); margin-top: 2px; }
-.team-stake { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: clamp(13px, 1.7vw, 17px); margin-top: 10px; }
-.team.polls .team-stake { color: var(--polls); } .team.market .team-stake { color: var(--market); }
-.board-score { align-items: start; }
-.dash { align-self: center; }
-.stakes { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
-.live-v small { display: block; text-align: right; font-family: var(--sans); font-stretch: 100%; font-weight: 400; font-size: 11px; color: var(--muted); }
 
 /* Nuit du vote */
 .night { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -143,20 +92,10 @@
   .cd-v { font-size: 14px; }
 }
 
-/* Ce que disent les chiffres */
-.insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-.insight { border-top: 2px solid var(--fg); padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
-.insight-kicker { margin: 0; font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.insight h3 { margin: 0; font-family: var(--display); font-stretch: 80%; font-weight: 800; font-size: 22px; line-height: 1.05; text-transform: uppercase; }
-.insight-sub { margin: 0; font-size: 13px; color: var(--muted); }
-.moments-grid { display: grid; grid-template-columns: 4em minmax(0, 1fr) 3.2em; gap: 4px 10px; align-items: center; }
-.m-label { grid-row: span 2; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; }
-.m-bar { position: relative; height: 20px; background: var(--track); display: flex; align-items: center; }
-.m-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
-.m-bar.polls i { background: var(--polls); } .m-bar.market i { background: var(--market); }
-.m-n { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Gauche ou droite */
+.lean { max-width: 720px; }
 .lean-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.lean-list li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 12px; }
+.lean-list li { display: grid; grid-template-columns: 12em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 12px; }
 .lean-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lean-track { position: relative; height: 10px; }
 .lean-track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--fg); }
@@ -164,20 +103,17 @@
 .lean-track i.pos { left: 50%; } .lean-track i.neg { right: 50%; }
 .lean-v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .lean-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); white-space: nowrap;
-  margin: 0 calc(3em + 8px) 0 calc(6.5em + 8px); }
-.insight-big { margin: 0; display: flex; align-items: baseline; gap: 10px; }
-.insight-big span { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: 64px; line-height: .9; }
-.insight-big small { font-size: 13px; color: var(--muted); max-width: 14em; }
-
+  margin: 0 calc(3em + 8px) 0 calc(12em + 8px); }
 /* Élection écartée des totaux */
 .match.excluded { opacity: .45; }
-.match.excluded .camp-name { color: var(--muted); font-size: 14px; }
 .cd-card.excluded .cd-card-head::after { content: "hors décompte"; }
 
-/* Étiquettes discrètes des barres : médias, Polymarket */
-.src-label { position: absolute; top: 50%; left: 5px; transform: translateY(-50%); font-size: 9px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; line-height: 1; white-space: nowrap; color: var(--muted); pointer-events: none; }
-.src-label.in { color: #fff; opacity: .85; }
+/* Étiquette discrète sous chaque barre : médias, Polymarket */
 .cd-row { grid-template-rows: auto 6px auto; }
 .cd-src { grid-column: 1; grid-row: 3; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); line-height: 1.2; }
 .cd-v, .cd-mark { grid-row: 1 / 4; }
+.cd-more { margin-left: auto; font-family: var(--display); font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; text-decoration: none; border-bottom: 2px solid var(--fg); }
+@media (max-width: 640px) {
+  .lean-list li { grid-template-columns: 9em minmax(0, 1fr) 2.6em; }
+  .lean-axis { margin: 0 calc(2.6em + 8px) 0 calc(9em + 8px); }
+}

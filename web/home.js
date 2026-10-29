@@ -1,10 +1,9 @@
-// Accueil « l'argent contre la rue » : ce que les gens disent aux sondeurs contre ce que les parieurs
-// misent sur Polymarket, sur toutes les présidentielles passées.
-// Score : pour chaque élection, le camp au plus petit score de Brier sur la campagne (même calcul que
-// bilan_previsions, à partir de bilan_quotidien). Veille : chance donnée au vainqueur le jour avant le vote.
-// Mises : dollars échangés (markets.volume) contre sondages publiés et personnes interrogées dans l'année.
-// Nuit du vote : nuit_electorale. Classement : agrégat de bilan_premier_a_voir (comme classement_premier_a_voir).
-// En direct : moyenne des sondages et cotes de l'élection en cours, comme sur election.html.
+// Accueil « l'argent contre la rue » : ce que disent les sondages publiés par les médias contre ce que
+// misent les parieurs de Polymarket, sur toutes les présidentielles passées.
+// Compte à rebours : à J-d, le favori de chaque camp (bilan_favoris) a-t-il gagné ? Comparé à 2027.
+// Veille : chance donnée au vainqueur le jour avant le vote (bilan_quotidien). Gauche ou droite : écart des
+// sondages sur le candidat le plus à droite. Nuit du vote : nuit_electorale. Classement : agrégat de
+// bilan_premier_a_voir (comme classement_premier_a_voir).
 const { supabaseUrl, supabaseKey, election: LIVE, exclus = [], plusADroite = {} } = window.POLL_CONFIG;
 const EXCLUDED = new Set(exclus);
 const db = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -17,12 +16,10 @@ const WINDOW = 30;       // jours de terrain pris dans la moyenne en direct
 const MIN_POLLS = 3;
 const MIN_ELECTIONS = 2; // un institut entre au classement à partir de 2 élections
 const HORIZON = 100;     // compte à rebours : jours avant le vote comparés
-const YEAR = 365;        // la rue : sondages publiés dans l'année avant le vote
 
 const $ = (id) => document.getElementById(id);
 const pct = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-const dec2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
 const shortDay = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const month = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -49,7 +46,6 @@ const el = (tag, cls, text) => {
   if (text !== undefined) n.textContent = text;
   return n;
 };
-const CAMP = { polls: 'La rue', market: 'L’argent' };
 
 // PostgREST renvoie au plus 1 000 lignes : on lit par tranches.
 async function all(query) {
@@ -64,7 +60,7 @@ async function all(query) {
 
 async function load() {
   const since = isoDay(new Date(Date.now() - 120 * DAY));
-  const [elections, results, cands, daily, first, markets, livePolls, pollMeta, favoris] = await Promise.all([
+  const [elections, results, cands, daily, first, markets, livePolls, favoris] = await Promise.all([
     all(() => db.from('elections').select('id, country, election_date, second_round_date').order('id')),
     all(() => db.from('results').select('election_id, round, candidate, value').order('election_id')),
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
@@ -74,34 +70,22 @@ async function load() {
     all(() => db.from('markets').select('election_id, candidate_name, volume, last_price, closed').order('condition_id')),
     all(() => db.from('polls').select('id, fieldwork_end, fieldwork_label, institute, poll_results(candidate, value)')
       .eq('election_id', LIVE).eq('round', 1).gte('fieldwork_end', since).order('id')),
-    all(() => db.from('polls').select('election_id, fieldwork_end, fieldwork_label, institute, sample_size').order('id')),
     // Table absente tant que la migration bilan_favoris n'est pas appliquée : pas de compte à rebours.
     all(() => db.from('bilan_favoris').select('election_id, jours, gagnant, favori_marche, proba_marche, favori_sondages, moyenne_sondages')
       .order('election_id').order('jours')).catch(() => null),
   ]);
   const people = new Map(cands.map((c) => [c.name, { full: c.full_name || c.name, color: c.parties && c.parties.color }]));
 
-  // Les mises de chaque élection : dollars échangés sur tous ses marchés ; sondages publiés dans l'année
-  // avant le vote (un sondage = un institut et un terrain) et somme de leurs échantillons connus.
+  // Dollars échangés sur le marché de chaque candidat (pour le dernier match).
   const today = new Date();
-  const stakes = (e, end) => {
-    const polls = new Map();
-    pollMeta.filter((p) => p.election_id === e.id && utc(p.fieldwork_end) <= end && utc(p.fieldwork_end) > new Date(+end - YEAR * DAY))
-      .forEach((p) => {
-        const key = p.institute + '|' + p.fieldwork_label + '|' + p.fieldwork_end;
-        polls.set(key, Math.max(polls.get(key) || 0, p.sample_size || 0));
-      });
-    const sizes = [...polls.values()];
+  const volumeOf = (eid) => {
     const named = new Map();
-    markets.filter((m) => m.election_id === e.id && m.candidate_name)
+    markets.filter((m) => m.election_id === eid && m.candidate_name)
       .forEach((m) => named.set(m.candidate_name, (named.get(m.candidate_name) || 0) + (m.volume || 0)));
-    return {
-      dollars: sum(markets.filter((m) => m.election_id === e.id).map((m) => m.volume || 0)), byCandidate: named,
-      polls: sizes.length, people: sum(sizes), partial: sizes.some((n) => !n),
-    };
+    return named;
   };
 
-  // Une ligne par élection passée : vainqueur, chances la veille, Brier de chaque camp, mises.
+  // Une ligne par élection passée : vainqueur, chances la veille, écart des sondages.
   const matches = elections.map((e) => {
     const res = results.filter((r) => r.election_id === e.id);
     if (!res.length) return null;
@@ -111,7 +95,6 @@ async function load() {
     const days = daily.filter((d) => d.election_id === e.id && d.polymarket != null && d.proba_sondages != null);
     if (!days.length) return null;
     const eve = days.find((d) => d.jour === isoDay(new Date(+vote - DAY)));
-    const brier = (key) => mean(days.map((d) => (1 - d[key] / 100) ** 2));
     const final = res.filter((r) => r.round === round).sort((a, b) => b.value - a.value);
     const m = {
       id: e.id, country: region.of(e.country), year: e.id.split('-')[1], vote,
@@ -121,10 +104,9 @@ async function load() {
       evePart: eve && eve.part_sondages != null ? +eve.part_sondages : null,
       result2: final.length >= 2 ? 100 * final[0].value / (final[0].value + final[1].value) : null,
       excluded: EXCLUDED.has(e.id),
-      brierPolls: brier('proba_sondages'), brierMarket: brier('polymarket'), stakes: stakes(e, vote),
+      volumes: volumeOf(e.id),
       series: days.map((d) => ({ date: utc(d.jour), polls: +d.proba_sondages, market: +d.polymarket })),
     };
-    m.camp = m.brierPolls < m.brierMarket ? 'polls' : 'market';
     return m;
   }).filter(Boolean).sort((a, b) => b.vote - a.vote);
 
@@ -155,7 +137,7 @@ async function load() {
   const liveVote = live && (live.second_round_date || live.election_date);
   return {
     people, matches, counted, ranking, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
-    live: { ...liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls), stakes: live ? stakes(live, today) : null },
+    live: liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls),
   };
 }
 
@@ -191,13 +173,11 @@ function liveSummary(people, markets, rows) {
 }
 
 // --- Rendu
-const peopleLine = (s) => (s.partial ? 'au moins ' : '') + compact.format(s.people) + ' personnes interrogées';
-
 function verdict(m) {
   const right = { polls: m.evePolls > 50, market: m.eveMarket > 50 };
-  const better = m.camp === 'polls' ? 'la rue' : 'l’argent';
-  if (right.polls && right.market) return m.country + ' : la rue et l’argent avaient le bon favori, ' + better + ' plus tôt';
-  if (!right.polls && !right.market) return m.country + ' : la rue et l’argent se sont trompés, ' + better + ' moins';
+  const closer = m.evePolls > m.eveMarket ? 'la rue' : 'l’argent';
+  if (right.polls && right.market) return m.country + ' : la rue et l’argent avaient le bon favori';
+  if (!right.polls && !right.market) return m.country + ' : la rue et l’argent se sont trompés, ' + closer + ' moins';
   return m.country + ' : ' + (right.polls ? 'la rue avait vu juste, pas l’argent' : 'l’argent avait vu juste, pas la rue');
 }
 
@@ -237,8 +217,8 @@ function renderLast({ people, matches, night }) {
   const name = (c) => people.get(c)?.full || c;
   $('t-last').textContent = verdict(m);
   const note = $('n-last');
-  const onWinner = m.stakes.byCandidate.get(m.winner);
-  const onLoser = m.stakes.byCandidate.get(m.loser);
+  const onWinner = m.volumes.get(m.winner);
+  const onLoser = m.volumes.get(m.loser);
   note.replaceChildren(el('b', '', name(m.winner) + ' ' + pct.format(m.share) + ' %'), ' · la veille\u00a0: ',
     el('b', 'polls-ink', 'la rue ' + pct0.format(m.evePolls) + ' %'), ', ', el('b', 'market-ink', 'l’argent ' + pct0.format(m.eveMarket) + ' %'), ' de chances',
     onWinner && onLoser ? ' · ' + usd(onWinner) + ' échangés sur ' + m.winner + ', ' + usd(onLoser) + ' sur ' + m.loser + '. ' : '. ');
@@ -305,22 +285,19 @@ function renderSheet({ people, matches }) {
   head.setAttribute('aria-hidden', 'true');
   const scale = el('div', 'scale');
   ['0 %', '50 %', '100 %'].forEach((t) => scale.append(el('span', '', t)));
-  head.append(el('span', '', 'Élection · mises'), scale, el('span', 'r', 'Moins d’erreurs (campagne)'));
+  head.append(el('span', '', 'Élection · vainqueur'), scale);
   list.append(head);
   const tip = $('tip');
   matches.forEach((m) => {
     const li = el('li');
-    const a = el('a', 'match ' + m.camp + (m.excluded ? ' excluded' : ''));
+    const a = el('a', 'match' + (m.excluded ? ' excluded' : ''));
     a.href = 'election.html?e=' + m.id;
     const name = people.get(m.winner)?.full || m.winner;
-    const s = m.stakes;
     a.setAttribute('aria-label', m.country + ' ' + m.year + ', vainqueur : ' + name + '. La veille : la rue ' + pct.format(m.evePolls)
-      + ' %, l’argent ' + pct.format(m.eveMarket) + ' %. ' + usd(s.dollars) + ' échangés, ' + s.polls + ' sondages. Moins d’erreurs : ' + CAMP[m.camp] + '.');
+      + ' %, l’argent ' + pct.format(m.eveMarket) + ' % de chances.' + (m.excluded ? ' Hors décompte.' : ''));
 
     const who = el('span', 'who-match');
-    const stakes = el('span', 'stakes');
-    stakes.append(el('span', 'market-ink', usd(s.dollars)), ' · ', el('span', 'polls-ink', s.polls + ' sondages'));
-    who.append(el('span', 'country', m.country), el('span', 'meta', m.year + ' · ' + name), stakes);
+    who.append(el('span', 'country', m.country), el('span', 'meta', m.year + ' · ' + (m.excluded ? 'hors décompte' : name)));
     const strip = el('span', 'strip');
     strip.append(el('span', 'zone'), el('span', 'mid'));
     const lo = Math.min(m.evePolls, m.eveMarket);
@@ -334,17 +311,12 @@ function renderSheet({ people, matches }) {
       d.style.left = v + '%';
       strip.append(d);
     });
-    const res = el('span', 'camp ' + m.camp);
-    if (m.excluded) res.append(el('span', 'camp-name', 'Hors décompte'), el('span', 'camp-eve', 'choix éditorial'));
-    else res.append(el('span', 'camp-name', CAMP[m.camp]), el('span', 'camp-eve',
-      'erreur ' + dec2.format(Math.min(m.brierPolls, m.brierMarket)) + ' contre ' + dec2.format(Math.max(m.brierPolls, m.brierMarket))));
-    a.append(who, strip, res);
+    a.append(who, strip);
 
     const show = (x, y) => {
       tip.replaceChildren(el('b', '', m.country + ' ' + m.year + ' · ' + name),
-        el('span', 'polls-ink', 'La rue, la veille : ' + pct.format(m.evePolls) + ' % · ' + s.polls + ' sondages, ' + peopleLine(s)),
-        el('span', 'market-ink', 'L’argent, la veille : ' + pct.format(m.eveMarket) + ' % · ' + usd(s.dollars) + ' échangés'),
-        el('span', '', 'Erreur sur la campagne : la rue ' + dec2.format(m.brierPolls) + ', l’argent ' + dec2.format(m.brierMarket)));
+        el('span', 'polls-ink', 'Médias : ' + pct.format(m.evePolls) + ' % de chances la veille'),
+        el('span', 'market-ink', 'Polymarket : ' + pct.format(m.eveMarket) + ' % de chances la veille'));
       tip.hidden = false;
       const r = tip.getBoundingClientRect();
       tip.style.left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x + 14)) + 'px';
@@ -356,31 +328,6 @@ function renderSheet({ people, matches }) {
     a.addEventListener('blur', () => { tip.hidden = true; });
     li.append(a);
     list.append(li);
-  });
-}
-
-function renderLive({ people, live }) {
-  const cols = $('live-cols');
-  cols.replaceChildren();
-  const s = live.stakes;
-  $('n-live').textContent = s ? usd(s.dollars) + ' échangés · ' + s.polls + ' sondages en un an' : '';
-  [['polls', 'La rue', 'intentions de vote au 1er tour, moyenne 30 jours', live.pollTop],
-   ['market', 'L’argent', 'chance de gagner selon Polymarket · dollars échangés', live.marketTop]].forEach(([camp, title, sub, rows]) => {
-    const col = el('div', 'live-col ' + camp);
-    col.append(el('h3', '', title), el('p', 'live-sub', sub));
-    const ol = el('ol');
-    const max = Math.max(...rows.map((r) => r.value), 1);
-    rows.forEach((r) => {
-      const li = el('li');
-      const bar = el('span', 'live-bar');
-      bar.style.width = (100 * r.value / max) + '%';
-      const v = el('span', 'live-v', pct.format(r.value) + ' %');
-      if (r.volume) v.append(el('small', '', usd(r.volume)));
-      li.append(el('span', 'live-name', people.get(r.candidate)?.full || r.candidate), v, bar);
-      ol.append(li);
-    });
-    col.append(ol);
-    cols.append(col);
   });
 }
 
@@ -407,13 +354,6 @@ function renderRanking({ ranking }) {
 // bilan_favoris donne, à la ligne d, la cote d'avant le jour J-d (la veille au soir de J-d) : la cote à la fin
 // de J-d est donc à la ligne d-1, comme la cote « la veille » de bilan_quotidien. Les sondages restent ceux
 // terminés avant J-d.
-// Étiquette discrète d'une barre rouge ou bleue : dans la barre si elle est assez longue, sinon juste après.
-function srcLabel(camp, width) {
-  const label = el('span', 'src-label' + (width >= 35 ? ' in' : ''), camp === 'polls' ? 'médias' : 'Polymarket');
-  if (width < 35) label.style.left = 'calc(' + width + '% + 4px)';
-  return label;
-}
-
 function favoriteAt(favoris, matches, d) {
   return matches.map((m) => {
     const row = (k) => favoris.find((f) => f.election_id === m.id && f.jours === k);
@@ -452,7 +392,9 @@ function renderCountdown(data) {
     now.replaceChildren(el('span', 'cd-now-label', '2027 aujourd’hui'));
     if (p.candidate === mk.candidate) now.append(el('b', '', name(p.candidate)), ' en tête des deux côtés ');
     else now.append('la rue : ', el('b', '', name(p.candidate)), ' · l’argent : ', el('b', '', name(mk.candidate)), ' ');
-    now.append(el('span', 'polls-ink', pct0.format(p.value) + ' %'), ' · ', el('span', 'market-ink', pct0.format(mk.value) + ' %'));
+    const more = el('a', 'cd-more', 'Suivre 2027 →');
+    more.href = 'election.html';
+    now.append(el('span', 'polls-ink', pct0.format(p.value) + ' %'), ' · ', el('span', 'market-ink', pct0.format(mk.value) + ' %'), more);
   }
 
   // Courbe : part des élections où le favori de chaque camp a gagné, selon le nombre de jours avant le vote.
@@ -540,88 +482,41 @@ function renderCountdown(data) {
   new ResizeObserver(() => { if (target.clientWidth !== w) { w = target.clientWidth; draw(); } }).observe(target);
 }
 
-// --- Ce que disent les chiffres : trois encadrés, chacun calculé, titre compris.
-function renderInsights({ counted, matches, favoris }) {
-  $('caution').textContent = counted.length + ' élections, c’est peu';
+// --- Gauche ou droite : écart des sondages, la veille, sur le candidat le plus à droite du duel final.
+function renderLean({ counted, matches }) {
+  $('caution').textContent = counted.length + ' élections';
   const out = matches.filter((m) => m.excluded);
   $('excluded-note').textContent = out.length
-    ? out.map((m) => m.country + ' ' + m.year).join(', ') + ' écarté' + (out.length > 1 ? 's' : '') + ' des totaux des deux camps'
+    ? out.map((m) => m.country + ' ' + m.year).join(', ') + ' écarté' + (out.length > 1 ? 's' : '') + ' des totaux'
     : 'aucune élection écartée';
-  const box = $('insights');
-  box.replaceChildren();
-  const card = (cls, kicker, title) => {
-    const c = el('article', 'insight ' + cls);
-    c.append(el('p', 'insight-kicker', kicker), el('h3', '', title));
-    box.append(c);
-    return c;
-  };
-
-  // 1. Le bon favori à J-100, J-30 et la veille.
-  if (favoris && favoris.length) {
-    const moments = [[100, 'J-100'], [30, 'J-30'], [1, 'Veille']].map(([d, label]) => {
-      const rows = favoriteAt(favoris, counted, d);
-      return { label, polls: tally(rows, 'polls'), market: tally(rows, 'market') };
-    });
-    const rate = (t) => (t.n ? t.right / t.n : 0);
-    const lead = moments.filter((m) => rate(m.market) > rate(m.polls)).length;
-    const c = card('moments', 'Le bon favori', lead >= 2 ? 'Dans les trois derniers mois, l’argent voit plus juste' : 'La rue tient tête à l’argent');
-    const grid = el('div', 'moments-grid');
-    moments.forEach((m) => {
-      grid.append(el('span', 'm-label', m.label));
-      [['polls', m.polls], ['market', m.market]].forEach(([camp, t]) => {
-        const bar = el('span', 'm-bar ' + camp);
-        const fill = el('i');
-        fill.style.width = 100 * rate(t) + '%';
-        bar.append(fill, srcLabel(camp, 100 * rate(t)));
-        grid.append(bar, el('b', 'm-n ' + camp + '-ink', t.n ? t.right + '/' + t.n : '–'));
-      });
-    });
-    c.append(grid);
-  }
-
-  // 2. Penchant gauche-droite : écart des sondages sur le candidat le plus à droite, la veille.
   const lean = counted.filter((m) => plusADroite[m.id] && m.evePart != null && m.result2 != null).map((m) => {
     const gap = m.evePart - m.result2;   // écart sur le vainqueur
     return { m, gap: plusADroite[m.id] === m.winner ? gap : -gap };
   }).sort((a, b) => a.gap - b.gap);
-  if (lean.length) {
-    const med = median(lean.map((l) => l.gap));
-    const over = lean.filter((l) => l.gap > 0.5).length;
-    const under = lean.filter((l) => l.gap < -0.5).length;
-    const title = Math.abs(med) < 1 ? 'Les sondages ne penchent ni à gauche ni à droite'
-      : med > 0 ? 'Les sondages surestiment la droite' : 'Les sondages sous-estiment la droite';
-    const c = card('lean', 'Gauche ou droite ?', title);
-    c.append(el('p', 'insight-sub', 'Droite sous-estimée ' + under + ' fois, surestimée ' + over + ' fois · écart médian ' + signed1(med) + ' pt'));
-    const scale = Math.max(5, Math.ceil(Math.max(...lean.map((l) => Math.abs(l.gap)))));
-    const list = el('ol', 'lean-list');
-    lean.forEach((l) => {
-      const li = el('li');
-      const track = el('span', 'lean-track');
-      const bar = el('i', l.gap >= 0 ? 'pos' : 'neg');
-      bar.style.width = (50 * Math.abs(l.gap) / scale) + '%';
-      track.append(bar);
-      li.append(el('span', 'lean-name', l.m.country), track, el('span', 'lean-v', signed1(l.gap)));
-      li.title = l.m.country + ' ' + l.m.year + ' : ' + plusADroite[l.m.id] + ' ' + signed1(l.gap) + ' point dans les sondages';
-      list.append(li);
-    });
-    const axis = el('div', 'lean-axis');
-    axis.append(el('span', '', '← droite sous-estimée'), el('span', '', 'droite surestimée →'));
-    c.append(list, axis);
-  }
-
-  // 3. Le vainqueur sous-estimé.
-  const win = counted.filter((m) => m.evePart != null && m.result2 != null).map((m) => m.evePart - m.result2);
-  if (win.length) {
-    const under = win.filter((g) => g < -0.5).length;
-    const c = card('winner', 'Le vainqueur', under * 2 > win.length ? 'Les sondages sous-estiment souvent le vainqueur'
-      : under * 2 === win.length ? 'Les sondages sous-estiment un vainqueur sur deux' : 'Les sondages sous-estiment rarement le vainqueur');
-    const big = el('p', 'insight-big');
-    big.append(el('span', 'polls-ink', under + '/' + win.length), el('small', '', 'fois sous-estimé la veille'));
-    const mean = win.reduce((a, g) => a + Math.abs(g), 0) / win.length;
-    const big2 = el('p', 'insight-big');
-    big2.append(el('span', '', pct.format(mean)), el('small', '', 'points d’erreur moyenne entre les deux finalistes'));
-    c.append(big, big2);
-  }
+  if (!lean.length) return;
+  $('sec-lean').hidden = false;
+  const med = median(lean.map((l) => l.gap));
+  const over = lean.filter((l) => l.gap > 0.5).length;
+  const under = lean.filter((l) => l.gap < -0.5).length;
+  $('t-lean').textContent = Math.abs(med) < 1 ? 'Les sondages ne penchent ni à gauche ni à droite'
+    : med > 0 ? 'Les sondages surestiment la droite' : 'Les sondages sous-estiment la droite';
+  $('n-lean').textContent = 'Candidat le plus à droite : sous-estimé ' + under + ' fois, surestimé ' + over + ' fois · écart médian ' + signed1(med) + ' point.';
+  const box = $('lean');
+  box.replaceChildren();
+  const scale = Math.max(5, Math.ceil(Math.max(...lean.map((l) => Math.abs(l.gap)))));
+  const list = el('ol', 'lean-list');
+  lean.forEach((l) => {
+    const li = el('li');
+    const track = el('span', 'lean-track');
+    const bar = el('i', l.gap >= 0 ? 'pos' : 'neg');
+    bar.style.width = (50 * Math.abs(l.gap) / scale) + '%';
+    track.append(bar);
+    li.append(el('span', 'lean-name', l.m.country + ' · ' + plusADroite[l.m.id]), track, el('span', 'lean-v', signed1(l.gap)));
+    list.append(li);
+  });
+  const axis = el('div', 'lean-axis');
+  axis.append(el('span', '', '← sous-estimée'), el('span', '', 'surestimée →'));
+  box.append(list, axis);
 }
 
 function skeleton() {
@@ -632,10 +527,9 @@ function skeleton() {
 skeleton();
 load().then((data) => {
   renderCountdown({ ...data, matches: data.counted, excluded: data.matches.filter((m) => m.excluded) });
-  renderInsights(data);
   renderLast(data);
   renderSheet(data);
-  renderLive(data);
+  renderLean(data);
   renderRanking(data);
 }).catch((err) => {
   const status = $('status');

@@ -46,19 +46,11 @@
         <output id="cd-out" for="cd-range"></output>
       </label>
       <div class="legend cd-legend" aria-hidden="true">
-        <span><i class="swatch polls"></i>Médias : % d’intentions de vote du candidat en tête des sondages</span>
+        <span><i class="swatch polls"></i>Médias : % d’intentions de vote du candidat en tête</span>
         <span><i class="swatch market"></i>Polymarket : % de chances du favori</span>
         <span>✓ a gagné · ✗ a perdu</span>
       </div>
       <ol class="cd-grid" id="cd-grid"></ol>
-    </section>
-
-    <section class="block" aria-labelledby="t-insights">
-      <div class="block-head">
-        <p class="kicker">Ce que disent les chiffres</p>
-        <h2 id="t-insights">Trois choses à retenir</h2>
-      </div>
-      <div class="insights" id="insights"></div>
     </section>
 
     <section class="block" aria-labelledby="t-last" id="sec-last">
@@ -77,26 +69,24 @@
 
     <section class="block" aria-labelledby="t-sheet">
       <div class="block-head">
-        <p class="kicker">Feuille de match</p>
+        <p class="kicker">Toutes les élections</p>
         <h2 id="t-sheet">La veille du vote, quelle chance donnaient-ils au futur vainqueur ?</h2>
-        <p class="note">Chance donnée au futur vainqueur la veille du vote. À droite du trait : le bon favori.</p>
       </div>
       <div class="legend" aria-hidden="true">
-        <span><i class="swatch polls"></i>La rue (sondages)</span>
-        <span><i class="swatch market"></i>L’argent (Polymarket)</span>
+        <span><i class="swatch polls"></i>Médias (sondages)</span>
+        <span><i class="swatch market"></i>Polymarket</span>
         <span class="legend-zone">Zone grisée : bon favori</span>
       </div>
       <ol class="sheet" id="sheet"></ol>
     </section>
 
-    <section class="block live-band" aria-labelledby="t-live">
+    <section class="block" aria-labelledby="t-lean" id="sec-lean" hidden>
       <div class="block-head">
-        <p class="kicker"><span class="live-dot"></span>Prochain match</p>
-        <h2 id="t-live">France 2027</h2>
-        <p class="note" id="n-live"></p>
+        <p class="kicker">Gauche ou droite ?</p>
+        <h2 id="t-lean">&nbsp;</h2>
+        <p class="note" id="n-lean"></p>
       </div>
-      <div class="live-cols" id="live-cols"></div>
-      <a class="more" href="election.html">Suivre 2027 →</a>
+      <div class="lean" id="lean"></div>
     </section>
 
     <section class="block" aria-labelledby="t-sources">
@@ -110,13 +100,11 @@
 
     <footer class="method">
       <h2>Comment on compte</h2>
-      <p><b>Le score</b> : pour chaque élection, l’erreur moyenne de chaque camp sur toute la campagne, jour par jour (score de Brier : l’écart au carré entre la chance donnée au vainqueur et 100 %). Le camp qui se trompe le moins gagne l’élection.</p>
-      <p><b>L’argent</b> : le volume d’un marché Polymarket, c’est le total des dollars échangés depuis son ouverture, achats et ventes, sur le « oui » comme sur le « non ». « 48 M$ sur Lula » veut dire 48 M$ échangés sur le marché « Lula gagne », pas 48 M$ pariés pour lui.</p>
-      <p><b>La rue</b> : le nombre de sondages publiés dans l’année avant le vote, et la somme de leurs échantillons. Certains instituts ne publient pas leur taille d’échantillon : le nombre de personnes interrogées est alors un minimum.</p>
-      <p><b>À J-X</b> : le favori de l’argent est le candidat le plus coté sur Polymarket la veille au soir ; celui de la rue, le candidat en tête de la moyenne des sondages des 30 jours précédents (1er tour avant celui-ci, 2nd tour ensuite, 3 sondages minimum). Être en tête au 1er tour n’est pas la même chose qu’être favori pour la victoire : c’est pourtant ce que titrent les médias.</p>
-      <p><b>Les sondages en probabilité</b> : l’écart moyen entre les deux finalistes dans les sondages de la dernière semaine connue, converti en chance de victoire avec une erreur type de 3,5 points. Polymarket : prix de la part « Oui ».</p>
-      <p><b>Choix éditoriaux</b> : <span id="excluded-note">certaines élections sont écartées des totaux</span>. Le classement gauche-droite des finalistes est celui de la rédaction.</p>
-      <p><b>Prudence</b> : <span id="caution">quelques élections, c’est peu</span>. Un score n’est pas une loi, et un camp peut gagner le match en se trompant de favori la veille.</p>
+      <p><b>À J-X</b> : le favori de Polymarket est le candidat le plus coté ce jour-là ; celui des médias, le candidat en tête de la moyenne des sondages des 30 jours précédents (1er tour, puis 2nd tour une fois le 1er passé ; 3 sondages minimum).</p>
+      <p><b>La veille du vote</b> : Polymarket, prix de la part « Oui » ; sondages, l’écart moyen entre les deux finalistes dans la dernière semaine, converti en chance de victoire avec une erreur type de 3,5 points. Les deux sont alors des chances de victoire, donc comparables.</p>
+      <p><b>Gauche ou droite</b> : écart, la veille, entre les sondages et le résultat pour le candidat le plus à droite du duel final, sur les voix des deux finalistes. Classement gauche-droite de la rédaction.</p>
+      <p><b>Dollars</b> : le volume d’un marché Polymarket est le total échangé depuis son ouverture, sur le « oui » comme sur le « non » ; ce ne sont pas des paris pour le candidat.</p>
+      <p><b>Choix éditoriaux</b> : <span id="excluded-note">certaines élections sont écartées des totaux</span>. <span id="caution">Peu d’élections</span> : ce sont des tendances, pas des lois.</p>
       <p><b>Sources</b> : sondages des listes de Wikipedia (CC BY-SA), cotes Polymarket, résultats officiels. Polymarket est bloqué en France par l’ANJ ; les cotes sont relevées depuis l’étranger.</p>
     </footer>
   </main>

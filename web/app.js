@@ -369,9 +369,6 @@ function renderHero() {
     $('headline').textContent = pollLead.candidate === marketLead.candidate
       ? fullName(pollLead.candidate) + ' en tête des sondages comme du marché'
       : fullName(pollLead.candidate) + ' en tête des sondages, ' + fullName(marketLead.candidate) + ' favori du marché';
-    lede.append('Moyenne des sondages : ', b(pct.format(pollLead.avg) + ' %'),
-      ' des intentions de vote pour ' + fullName(pollLead.candidate) + '. Polymarket lui donne ',
-      b(pct.format(data.market.find((m) => m.candidate === pollLead.candidate)?.proba ?? 0) + ' %'), ' de chances de gagner. ');
     // Le désaccord le plus net entre les deux classements, parmi les candidats que le marché prend au sérieux.
     const g = st.rows.filter((r) => r.proba >= 3)
       .map((r) => ({ ...r, gap: (r.pollRank ?? st.polled.length + 1) - r.marketRank }))
@@ -386,7 +383,6 @@ function renderHero() {
   // Élection passée : le bilan se fait toujours sur le tour décisif, quel que soit le tour affiché.
   const decisive = round === e.decisive ? st : standings(e, data, pollsFor(e, data, e.decisive), e.decisive);
   const winner = e.results.get(e.decisive)[0];
-  const w = decisive.rows.find((r) => r.candidate === winner.candidate);
   const pollsRight = decisive.polled[0]?.candidate === winner.candidate;
   const marketRight = data.market[0]?.candidate === winner.candidate;
   const name = fullName(winner.candidate);
@@ -395,15 +391,6 @@ function renderHero() {
     : pollsRight ? name + ' l’emporte : les sondages avaient vu juste, pas le marché'
     : marketRight ? name + ' l’emporte : le marché avait vu juste, pas les sondages'
     : name + ' l’emporte, contre les sondages et le marché';
-  lede.append(name + ' : ', b(pct.format(winner.value) + ' %'), (e.decisive === 2 ? ' au 2nd tour. ' : ' des voix. '));
-  if (w && w.avg != null) {
-    const gap = w.avg - w.result;
-    const n = e.results.get(e.decisive).length;
-    lede.append((n === 2 ? 'Entre les deux finalistes' : 'Entre les ' + n + ' principaux candidats')
-      + ', la dernière moyenne des sondages lui donnait ', b(pct.format(w.avg) + ' %'), ', contre ' + pct.format(w.result)
-      + ' % dans les urnes (' + signed.format(gap) + ' point' + (Math.abs(gap) >= 2 ? 's' : '') + '). ');
-  }
-  if (w && w.proba != null) lede.append('Polymarket la veille : ', b(pct.format(w.proba) + ' %'), ' de chances. ');
   const firstRight = (data.first || []).filter((f) => f.juste && f.jours_avance != null).sort((x, y) => y.jours_avance - x.jours_avance)[0];
   if (firstRight) {
     lede.append('Premier à l’avoir vu durablement : ', b(firstRight.genre === 'moyenne' ? 'la moyenne des sondages' : firstRight.source),
