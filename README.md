@@ -24,6 +24,8 @@ cp .env.example .env                     # puis y mettre la chaîne de connexion
 .venv/bin/python -m collector polls      # une seule source : polymarket | polls | notices | stats
 ```
 
+Tests des analyseurs (cas réels des tableaux Wikipedia) : `.venv/bin/python -m unittest`.
+
 Schéma : `supabase/migrations/` pour Postgres, `collector/schema.sql` pour SQLite (garder les deux alignés).
 Relancer est sans danger : les cotes sont dédoublonnées par horodatage, les sondages Wikipedia sont
 rechargés en entier, et seules les nouvelles notices sont téléchargées (PDF mis en cache dans `data/notices/`).
