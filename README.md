@@ -8,6 +8,7 @@ SQLite locale (`data/polls.db`) :
 | API Polymarket (Gamma + CLOB) | marchés par candidat + historique des cotes (journalier, + horaire sur 7 jours pour les marchés ouverts) | `collector/polymarket.py` |
 | Wikipedia (liste des sondages) | chiffres par candidat, institut, dates de terrain, échantillon, scénario, lien vers la notice | `collector/wikipedia_polls.py` |
 | Commission des sondages (notices PDF) | commanditaire(s) normalisés (BFMTV, LCI, RTL…), date de première publication | `collector/notices.py` |
+| Sites des chaînes (plans du site) | articles qui citent un sondage : date, institut, commanditaires — **non lancé, voir ci-dessous** | `collector/media_polls.py` |
 
 Les élections suivies sont dans `collector/config.py` : `fr-2027` en direct, et en rétrospective `fr-2022`,
 `us-2024` et onze autres présidentielles depuis 2023 (Argentine, Mexique, Taïwan, Roumanie, Pologne,
@@ -64,17 +65,35 @@ JOIN markets USING (condition_id) WHERE candidate = 'Marine Le Pen' ORDER BY ts;
 - Trouver le slug Polymarket d'une élection : lancer le workflow avec `recherche_polymarket`
   (ex. `--query chile+presidential` ou `--query slug:brazil-presidential-election`).
 
+## Ce que montrent les chaînes (prêt, pas encore lancé)
+
+`python -m collector media [--media BFMTV] [--since 2025-01-01]` lit les plans des sites de BFMTV,
+TF1info/LCI et franceinfo, garde les articles « sondage + présidentielle », et note pour chacun la date,
+l'institut cité, les commanditaires (« sondage Harris Interactive pour M6/RTL ») et s'il donne des
+intentions de vote (table `media_articles`). La vue `v_media_polls` relie chaque article au dernier
+sondage du même institut terminé dans les 14 jours ; `couverture_medias` (sondages relayés sur tous ceux
+publiés, part de ses propres sondages, instituts) et `selection_medias` (écart, candidat par candidat,
+entre les sondages relayés et la moyenne de tous les sondages des 30 jours précédents) en tirent la mesure.
+
+Avant de le lancer :
+- **Droits** : les robots.txt de ces trois sites interdisent les agents d'IA (ClaudeBot, Claude-User, GPTBot…),
+  ce qui vaut opposition à la fouille de textes au sens de la directive européenne sur le droit d'auteur.
+  Le collecteur, lui, se présente sous son nom (`poll-collector`) et respecte le robots.txt, mais un usage
+  commercial des articles est à faire valider. Il n'est pas dans la collecte planifiée.
+- **CNews et Europe 1** refusent tous les robots : non collectés (saisie manuelle ou accord à prévoir).
+- Sans articles, on dispose déjà des sondages **commandés** par chaque média (`ecart_commanditaires`).
+
 ## Base de données (Supabase)
 
 Migrations dans `supabase/migrations/`, à appliquer dans l'ordre.
 
 | Élément | Rôle |
 |---|---|
-| 11 tables, 12 clés étrangères | `elections`, `polls` → `poll_results`, `notices` → `notice_sponsors`, `markets` → `market_prices`, `results`, `parties` → `candidates`, `favorites` → `auth.users` |
+| 13 tables, 14 clés étrangères | `elections`, `polls` → `poll_results`, `notices` → `notice_sponsors`, `markets` → `market_prices`, `results`, `parties` → `candidates`, `favorites` → `auth.users`, `media_outlets` → `media_articles` (→ `elections`) |
 | RLS sur toutes les tables | lecture publique des données ; `favorites` : chaque utilisateur ne voit et ne modifie que ses lignes |
 | Triggers | `ensure_candidate` (nom inconnu → fiche candidat), `polls_normalize_institute` (un nom par institut), `markets_link_candidate` (marché Polymarket → fiche candidat) |
-| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (toutes les élections passées), `premier_a_voir` et `classement_premier_a_voir` (qui a vu le vainqueur en premier), `mes_favoris` |
-| Vue | `v_poll_sponsors` (sondages avec leurs commanditaires) |
+| Fonctions RPC | `moyenne_recente`, `evolution_mensuelle`, `ecart_commanditaires`, `erreur_sondages`, `sondages_vs_resultat`, `marches_actuels`, `comparaison_quotidienne`, `bilan_previsions` (toutes les élections passées), `premier_a_voir` et `classement_premier_a_voir` (qui a vu le vainqueur en premier), `couverture_medias` et `selection_medias` (ce que montrent les chaînes), `mes_favoris` |
+| Vues | `v_poll_sponsors` (sondages avec leurs commanditaires), `v_media_polls` (articles des chaînes → sondages) |
 
 Aucun nom de candidat ni couleur n'est écrit dans le tableau de bord : les noms viennent des sondages,
 les couleurs de la table `parties`, et les « candidats en tête » sont calculés par les fonctions.

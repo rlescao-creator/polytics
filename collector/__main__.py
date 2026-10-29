@@ -1,4 +1,4 @@
-"""Usage : python -m collector [all|polymarket|polls|notices|stats|check] [--election fr-2027] [--db data/polls.db]
+"""Usage : python -m collector [all|polymarket|polls|notices|media|stats|check] [--election fr-2027] [--db data/polls.db]
 
 Base : $DATABASE_URL (postgresql://…, ex. Supabase) si défini, sinon data/polls.db (SQLite).
 Les variables peuvent aussi venir d'un fichier .env (ou du fichier pointé par $COLLECTOR_ENV).
@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 import sys
 from pathlib import Path
 
-from . import check, notices, polymarket, polymarket_legacy, wikipedia_polls
+from . import check, media_polls, notices, polymarket, polymarket_legacy, wikipedia_polls
 from .config import ELECTIONS
 from .db import connect
 
@@ -110,12 +110,15 @@ def main():
     data_dir = Path(os.environ.get("COLLECTOR_DATA", ROOT / "data"))
     ap = argparse.ArgumentParser(prog="collector")
     ap.add_argument("command", nargs="?", default="all",
-                    choices=["all", "polymarket", "polls", "notices", "stats", "check", "scheduled", "polymarket-legacy", "polymarket-search"])
+                    choices=["all", "polymarket", "polls", "notices", "media", "stats", "check", "scheduled", "polymarket-legacy",
+                             "polymarket-search"])
     ap.add_argument("--election", action="append", help="id d'élection (répétable), défaut : toutes")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL") or str(data_dir / "polls.db"),
                     help="fichier SQLite ou URL postgresql:// (défaut : $DATABASE_URL, sinon data/polls.db)")
     ap.add_argument("--refresh-notices", action="store_true", help="re-parser toutes les notices")
     ap.add_argument("--query", action="append", help="texte recherché (polymarket-search, répétable)")
+    ap.add_argument("--media", action="append", help="chaîne de config.MEDIA_SITES (media, répétable), défaut : toutes")
+    ap.add_argument("--since", type=date.fromisoformat, help="date de début (media), défaut : début des fenêtres")
     ap.add_argument("--quiet", action="store_true", help="ne pas afficher les stats (cron)")
     args = ap.parse_args()
 
@@ -137,6 +140,8 @@ def main():
         wikipedia_polls.collect(con, args.election)
     if args.command in ("all", "notices"):
         notices.collect(con, data_dir / "notices", refresh=args.refresh_notices)
+    if args.command in ("all", "media"):
+        media_polls.collect(con, args.media, since=args.since)
     if not args.quiet:
         stats(con)
 

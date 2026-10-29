@@ -3,106 +3,69 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mon suivi 2027</title>
+  <title>Présidentielle 2027</title>
+  <meta name="description" content="Présidentielle 2027 : moyenne des sondages du premier tour et cotes Polymarket, mises à jour chaque jour.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap">
-  <style>
-    :root {
-      --bg: #f6f5f1; --panel: #ffffff; --fg: #1d1d22; --muted: #6b6a73; --line: #e2e0d8;
-      --accent: #1d1d22; --bad: #c0392b; --ok: #2e7d4f;
-      --serif: "Fraunces", Georgia, serif; --sans: "Inter", system-ui, -apple-system, sans-serif;
-      color-scheme: light;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg: #15151a; --panel: #1e1e25; --fg: #ecebe6; --muted: #9b9aa3; --line: #2e2e37; --accent: #ecebe6; color-scheme: dark; }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
-    main { max-width: 960px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; display: flex; flex-direction: column; gap: 28px; }
-    header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; }
-    .eyebrow { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-    h1 { margin: 4px 0 0; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 5vw, 40px); line-height: 1.1; }
-    h2 { margin: 0; font-size: 17px; font-weight: 600; }
-    .note { margin: 0; color: var(--muted); font-size: 13px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-    .grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-    @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-    form { display: flex; flex-direction: column; gap: 10px; }
-    label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-    input { font: inherit; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
-    button { font: inherit; font-weight: 500; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
-    button.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    button:focus-visible, input:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
-    .msg { margin: 0; font-size: 13px; min-height: 1.5em; }
-    .msg.error { color: var(--bad); } .msg.ok { color: var(--ok); }
-    .who { font-size: 14px; } .who b { font-weight: 600; }
-    ul { list-style: none; margin: 0; padding: 0; }
-    .cand { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 36px; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
-    .cand:last-child { border-bottom: 0; }
-    .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); }
-    .name { font-weight: 500; overflow-wrap: anywhere; }
-    .party { color: var(--muted); font-size: 12px; margin-left: 6px; }
-    .val { font-variant-numeric: tabular-nums; text-align: right; }
-    .val small { color: var(--muted); display: block; font-size: 12px; }
-    .star { padding: 4px 0; width: 36px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 18px; line-height: 1; }
-    .star[aria-pressed="true"] { color: #e6a019; border-color: #e6a019; }
-    .fav { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-    .fav:last-child { border-bottom: 0; }
-    .fav .big { font-family: var(--serif); font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
-    .fav .metrics { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
-    .fav .metrics span { color: var(--muted); font-size: 12px; display: block; }
-    .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <p class="eyebrow">Présidentielle 2027 · sondages et Polymarket</p>
-        <h1>Mon suivi 2027</h1>
-      </div>
-      <p class="note" id="period"></p>
+    <nav class="top">
+      <span class="brand">Polytics</span>
+      <a href="suivi.html">Mon suivi</a>
+    </nav>
+
+    <header class="hero">
+      <p class="eyebrow" id="updated">Présidentielle 2027 · chargement…</p>
+      <h1 id="headline">Sondages et marché, côte à côte</h1>
+      <p class="lede" id="lede"></p>
     </header>
 
-    <section class="card" id="auth">
-      <div id="signed-out">
-        <form id="auth-form">
-          <h2>Connexion</h2>
-          <p class="note">Créez un compte pour suivre vos candidats favoris. Vos favoris ne sont visibles que par vous.</p>
-          <label>Adresse e-mail <input id="email" type="email" autocomplete="email" required></label>
-          <label>Mot de passe (6 caractères minimum) <input id="password" type="password" autocomplete="current-password" minlength="6" required></label>
-          <div class="row">
-            <button type="submit" id="signin">Se connecter</button>
-            <button type="button" class="ghost" id="signup">Créer un compte</button>
-          </div>
-        </form>
+    <section class="block" aria-labelledby="t-now">
+      <div class="block-head">
+        <h2 id="t-now">Deux mesures, deux échelles</h2>
+        <p class="note">Les sondages mesurent des <b>intentions de vote au premier tour</b>. Polymarket donne une <b>chance de gagner l'élection</b>. Ce ne sont pas les mêmes chiffres : chaque colonne a sa propre échelle.</p>
       </div>
-      <div id="signed-in" hidden>
-        <div class="row" style="justify-content: space-between; align-items: center;">
-          <p class="who">Connecté en tant que <b id="user-email"></b></p>
-          <button type="button" class="ghost" id="signout">Se déconnecter</button>
-        </div>
+      <div class="board" id="board" role="table" aria-label="Candidats : sondages et Polymarket">
+        <p class="empty">Chargement…</p>
       </div>
-      <p class="msg" id="auth-msg" role="status"></p>
     </section>
 
-    <div class="grid">
-      <section class="card">
-        <h2>Tous les candidats</h2>
-        <p class="note">Moyenne des sondages du 1er tour sur les 30 derniers jours de terrain, en %. Cliquez sur l'étoile pour suivre un candidat.</p>
-        <ul id="candidates"><li class="empty">Chargement…</li></ul>
-      </section>
-      <section class="card">
-        <h2>Mes favoris</h2>
-        <p class="note">Sondages contre Polymarket, pour les candidats que vous suivez.</p>
-        <ul id="favorites"><li class="empty">Connectez-vous pour voir vos favoris.</li></ul>
-      </section>
-    </div>
+    <section class="block" aria-labelledby="t-polls">
+      <div class="block-head">
+        <h2 id="t-polls">Intentions de vote au premier tour</h2>
+        <p class="note">Chaque point est un sondage. La ligne est la moyenne des sondages des 30 jours précédents.</p>
+      </div>
+      <figure class="chart" id="chart-polls"></figure>
+    </section>
+
+    <section class="block" aria-labelledby="t-market">
+      <div class="block-head">
+        <h2 id="t-market">Chance de victoire selon Polymarket</h2>
+        <p class="note">Dernier prix de la journée de la part « Oui » sur chaque candidat, lu comme une probabilité.</p>
+      </div>
+      <figure class="chart" id="chart-market"></figure>
+    </section>
+
+    <section class="block" aria-labelledby="t-latest">
+      <div class="block-head">
+        <h2 id="t-latest">Derniers sondages</h2>
+        <p class="note">Quand un institut teste plusieurs hypothèses de candidatures, on fait la moyenne des hypothèses où le candidat figure.</p>
+      </div>
+      <ol class="latest" id="latest"><li class="empty">Chargement…</li></ol>
+    </section>
+
+    <footer class="method">
+      <h2>Méthode et sources</h2>
+      <p><b>Sondages</b> : <a href="https://fr.wikipedia.org/wiki/Liste_de_sondages_sur_l%27%C3%A9lection_pr%C3%A9sidentielle_fran%C3%A7aise_de_2027">liste de Wikipedia</a> (licence CC BY-SA), commanditaires lus dans les notices de la <a href="https://www.commission-des-sondages.fr/">Commission des sondages</a>. Un sondage compte une fois, quel que soit son nombre d'hypothèses. La moyenne d'un candidat n'est calculée qu'à partir de 3 sondages sur 30 jours.</p>
+      <p><b>Marché</b> : <a href="https://polymarket.com/">Polymarket</a>, marché sur le vainqueur de l'élection. Polymarket est bloqué en France par l'ANJ ; les cotes sont relevées depuis l'étranger. Une cote reflète ce que parient quelques milliers de personnes, pas une intention de vote.</p>
+    </footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

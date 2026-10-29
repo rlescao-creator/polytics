@@ -191,3 +191,19 @@ MEDIA = [
     (r"Huff ?Post", "HuffPost", "web"),
     (r"Grand ?Continent", "Le Grand Continent", "web"),
 ]
+
+
+# Sites des chaînes dont on relève les articles de sondage (collector/media_polls.py) :
+#   sitemap  : comment lister leurs articles (CNews et Europe 1 refusent tous les robots : absents) ;
+#   sponsors : noms (de MEDIA) sous lesquels la chaîne commande ses propres sondages.
+MEDIA_SITES = {
+    "BFMTV": {"site": "bfmtv.com", "sitemap": "bfmtv", "sponsors": ["BFMTV"]},
+    "TF1-LCI": {"site": "tf1info.fr", "sitemap": "tf1info", "sponsors": ["TF1", "LCI"]},
+    "franceinfo": {"site": "franceinfo.fr", "sitemap": "franceinfo", "sponsors": ["franceinfo", "France Télévisions"]},
+}
+
+# Période où un article de sondage est rattaché à une élection (fin ouverte : jusqu'à aujourd'hui).
+MEDIA_WINDOWS = {
+    "fr-2022": ("2021-09-01", "2022-04-24"),
+    "fr-2027": ("2025-01-01", None),
+}

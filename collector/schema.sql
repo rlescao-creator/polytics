@@ -93,3 +93,24 @@ CREATE VIEW IF NOT EXISTS v_poll_sponsors AS
 SELECT p.*, s.sponsor, s.media_type
 FROM polls p
 LEFT JOIN notice_sponsors s ON s.notice_url = p.notice_url;
+
+-- Ce que montrent les chaînes : articles de leurs sites qui citent un sondage (voir supabase/migrations).
+CREATE TABLE IF NOT EXISTS media_outlets (
+  name     TEXT PRIMARY KEY,
+  site     TEXT NOT NULL,
+  sponsors TEXT NOT NULL DEFAULT ''          -- noms séparés par des virgules (tableau en Postgres)
+);
+
+CREATE TABLE IF NOT EXISTS media_articles (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  media           TEXT NOT NULL REFERENCES media_outlets(name),
+  url             TEXT NOT NULL UNIQUE,
+  published_at    TEXT,
+  title           TEXT,
+  election_id     TEXT REFERENCES elections(id),
+  institute       TEXT,
+  commissioned_by TEXT,
+  vote_intention  INTEGER NOT NULL DEFAULT 0,
+  via             TEXT NOT NULL,
+  fetched_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
