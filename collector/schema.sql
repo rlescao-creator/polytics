@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS market_prices (
   PRIMARY KEY (condition_id, ts)
 );
 
+-- Nuit électorale : cotes au pas de 10 minutes du jour du vote au lendemain (série « national » ou une ville).
+CREATE TABLE IF NOT EXISTS nuit_electorale (
+  election_id   TEXT NOT NULL REFERENCES elections(id),
+  serie         TEXT NOT NULL,
+  candidat      TEXT NOT NULL,
+  volume        REAL,                       -- dollars échangés sur le marché du candidat
+  ts            INTEGER NOT NULL,
+  price         REAL NOT NULL,
+  PRIMARY KEY (election_id, serie, candidat, ts)
+);
+
 -- Un sondage = une ligne (un scénario) d'un tableau Wikipedia.
 -- Un même sondage testant plusieurs hypothèses donne plusieurs lignes (scenario 1..n).
 CREATE TABLE IF NOT EXISTS polls (

@@ -1,7 +1,10 @@
 """Marchés Polymarket : liste des candidats + historique des cotes."""
 import json
+import re
+import unicodedata
+from datetime import date, datetime, timedelta, timezone
 
-from .config import ELECTIONS
+from .config import ELECTIONS, RESULTS
 from .db import now
 from .http import get_json
 
@@ -87,3 +90,62 @@ def collect(con, election_ids=None, min_volume=1000):
                 n_points += len(points)
             print(f"[polymarket] {eid}: {n_markets} marchés, {n_points} points de cotes écrits")
     return unreachable
+
+
+def _bare(text):
+    return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower())
+
+
+def collect_night(con, election_ids=None, fidelity=10):
+    """Nuit électorale : cotes des deux finalistes au pas de fidelity minutes, du jour du vote (0 h UTC) au
+    surlendemain, pour le marché national et les événements de ELECTIONS[...]["polymarket_nuit"] (une ville…).
+
+    Une élection déjà relevée n'est pas relue : passé le vote, ces cotes ne bougent plus.
+    """
+    for eid in election_ids or ELECTIONS:
+        e, res = ELECTIONS[eid], RESULTS.get(eid)
+        vote = e["second_round_date"] or e["election_date"]
+        if not res or not vote or date.fromisoformat(vote) >= date.today():
+            continue
+        finalists = sorted(res[max(r for r in res if isinstance(r, int))].items(), key=lambda kv: -kv[1])[:2]
+        names = [n for n, _ in finalists]
+        start = int(datetime.fromisoformat(vote).replace(tzinfo=timezone.utc).timestamp())
+        window = {"startTs": start, "endTs": start + int(timedelta(days=2).total_seconds()), "fidelity": fidelity}
+
+        def pick(markets):
+            """Le marché le plus échangé de chaque finaliste, nom comparé sans accents ni casse."""
+            out = []
+            for n in names:
+                m = next((m for m in markets if m[1] and (_bare(n) in _bare(m[0]) or _bare(m[0]) in _bare(n))), None)
+                if m:
+                    out.append((n, m[1], m[2]))
+            return out
+
+        series = {"national": pick([(m["candidate"], m["yes_token_id"], m["volume"]) for m in con.execute(
+            "SELECT candidate, yes_token_id, volume FROM markets WHERE election_id = ? ORDER BY volume DESC", (eid,)).fetchall()])}
+        for label, slug in e.get("polymarket_nuit", {}).items():
+            try:
+                events = get_json(f"{GAMMA}/events", {"slug": slug})
+            except OSError as err:
+                print(f"[nuit] {eid} {label}: API injoignable ({err})")
+                continue
+            # « Other », « Candidate A » ne correspondent à aucun finaliste et sont ignorés.
+            series[label] = pick(sorted(((m.get("groupItemTitle") or m["question"], json.loads(m["clobTokenIds"])[0],
+                                          float(m.get("volume") or 0)) for m in (events[0]["markets"] if events else [])),
+                                        key=lambda m: -m[2]))
+
+        for label, markets in series.items():
+            if con.execute("SELECT 1 FROM nuit_electorale WHERE election_id = ? AND serie = ? LIMIT 1",
+                           (eid, label)).fetchone():
+                continue
+            rows = []
+            for name, token, volume in markets:
+                try:
+                    rows += [(eid, label, name, volume, p["t"], p["p"]) for p in _history(token, **window)]
+                except OSError as err:
+                    print(f"[nuit] {eid} {label} {name}: historique non récupéré ({err})")
+            con.executemany(
+                "INSERT INTO nuit_electorale (election_id, serie, candidat, volume, ts, price) VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (election_id, serie, candidat, ts) DO NOTHING", rows)
+            con.commit()
+            print(f"[nuit] {eid} {label}: {len(rows)} points")

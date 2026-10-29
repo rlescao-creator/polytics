@@ -109,6 +109,8 @@ ELECTIONS = {
         "name": "Élection présidentielle brésilienne 2026", "country": "BR",
         "election_date": "2026-10-04", "second_round_date": "2026-10-25",
         "polymarket_events": ["brazil-presidential-election"],
+        # Marché local au faible volume (environ 20 000 $), gardé pour le comparer au marché national.
+        "polymarket_nuit": {"Ville de Rio de Janeiro": "brazil-presidential-election-second-round-winner-in-rio-de-janeiro-city"},
         "wikipedia": ("en", "Opinion polling for the 2026 Brazilian presidential election"),
         "candidates": {"Lula": "Luiz Inácio Lula da Silva", "Flávio Bolsonaro": "Flávio Bolsonaro"},
     },

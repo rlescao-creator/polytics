@@ -20,6 +20,10 @@ const longDay = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long'
 const month = new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: 'UTC' });
 const monthYear = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const relative = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' });
+const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+const usd = (v) => compact.format(v) + '\u00a0$';
+const hour = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+const dayHour = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
 const region = new Intl.DisplayNames(['fr'], { type: 'region' });
 const ordinal = (n) => (n === 1 ? '1er' : n + 'e');
 const roundName = (r) => (r === 1 ? '1er tour' : '2nd tour');
@@ -146,7 +150,7 @@ async function bilan(table, rpc, e) {
 async function load(e) {
   const end = e.past ? e.end : new Date();
   const since = isoDay(new Date(+end - (HISTORY + WINDOW) * DAY));
-  const [rows, sponsors, markets, first, duel] = await Promise.all([
+  const [rows, sponsors, markets, first, duel, night] = await Promise.all([
     all(() => db.from('polls')
       .select('id, round, fieldwork_end, fieldwork_label, institute, media, scenario, sample_size, notice_url, source, poll_results(candidate, value)')
       .eq('election_id', e.id).gte('fieldwork_end', since).order('id')),
@@ -156,6 +160,8 @@ async function load(e) {
       .eq('election_id', e.id).order('condition_id')),
     e.past ? bilan('bilan_premier_a_voir', 'premier_a_voir', e) : [],
     e.past ? bilan('bilan_quotidien', 'comparaison_quotidienne', e) : [],
+    e.past ? all(() => db.from('nuit_electorale').select('serie, candidat, volume, ts, price').eq('election_id', e.id).order('ts'))
+      .catch(() => []) : [],
   ]);
 
   // Marchés suivis : en direct, les mieux cotés ; après le vote, les plus échangés et ceux des candidats du résultat.
@@ -189,7 +195,11 @@ async function load(e) {
 
   const bySponsor = new Map();
   sponsors.forEach((s) => s.sponsor && bySponsor.set(s.id, (bySponsor.get(s.id) || new Set()).add(s.sponsor)));
-  return { rows, bySponsor, market, marketSeries, lastTs, first, duel };
+  // L'argent : dollars échangés sur tous les marchés de l'élection, et sur le marché de chaque candidat.
+  const volumeOf = new Map();
+  markets.filter((m) => m.candidate_name).forEach((m) => volumeOf.set(m.candidate_name, (volumeOf.get(m.candidate_name) || 0) + (m.volume || 0)));
+  const dollars = markets.reduce((t, m) => t + (m.volume || 0), 0);
+  return { rows, bySponsor, market, marketSeries, lastTs, first, duel, night, volumeOf, dollars };
 }
 
 // Un sondage = un institut et un terrain ; ses hypothèses (scenario) sont moyennées par candidat.
@@ -332,6 +342,7 @@ async function show() {
   renderRounds();
   renderBoard();
   renderFirst();
+  renderNight();
   renderCharts();
   renderLatest();
   BUSY.forEach((id) => $(id).removeAttribute('aria-busy'));
@@ -344,6 +355,7 @@ function renderHero() {
   lede.replaceChildren();
   const eyebrow = ['Présidentielle · ' + titleOf(e)];
   if (e.past) eyebrow.push((e.decisive === 2 ? '2nd tour le ' : 'vote le ') + longDay.format(e.end));
+  if (data.dollars) eyebrow.push(usd(data.dollars) + ' échangés sur Polymarket');
   else {
     if (data.lastTs) eyebrow.push('cotes mises à jour ' + ago(new Date(data.lastTs * 1000)));
     if (st.last) eyebrow.push('dernier sondage le ' + longDay.format(st.last));
@@ -503,7 +515,9 @@ function renderBoard() {
         range: r.avg == null ? null : [r.min, r.max] }));
     }
     const market = el('div', 'cell');
-    market.append(meter({ value: r.proba, scale: marketScale, color, sub: r.proba == null ? 'pas de marché' : ordinal(r.marketRank) }));
+    const traded = view.data.volumeOf.get(r.candidate);
+    market.append(meter({ value: r.proba, scale: marketScale, color,
+      sub: r.proba == null ? 'pas de marché' : ordinal(r.marketRank) + (traded ? ' · ' + usd(traded) + ' échangés' : '') }));
     [who, vote, market].forEach((c) => c.setAttribute('role', 'cell'));
     row.append(who, vote, market);
     board.append(row);
@@ -558,7 +572,8 @@ function endLabels(series, yDomain, height) {
 
 const observers = new Map();
 function lineChart(target, opts) {
-  const { dots = [], series, yLabel, color, tip, rules = [], extra = [], yDomain: fixed, xDomain, focusable = true } = opts;
+  const { dots = [], series, yLabel, color, tip, rules = [], extra = [], yDomain: fixed, xDomain, focusable = true,
+    dashed = () => false, ticks: tickCount = 8, xFormat = tickFormat, curve = 'monotone-x' } = opts;
   const fade = (d) => (focusable && state.focus && d.candidate !== state.focus ? 0.12 : 1);
   const draw = () => {
     const width = target.clientWidth;
@@ -572,7 +587,7 @@ function lineChart(target, opts) {
     const chart = Plot.plot({
       width, height, marginLeft: 36, marginRight: narrow ? 96 : 124, marginTop: 28,
       style: { color: 'var(--muted)', background: 'transparent', fontSize: '12px' },
-      x: { type: 'utc', tickFormat, ticks: narrow ? 4 : 8, label: null, domain: xDomain },
+      x: { type: 'utc', tickFormat: xFormat, ticks: narrow ? 4 : tickCount, label: null, domain: xDomain },
       y: { domain: yDomain, grid: true, label: yLabel, tickFormat: (v) => v + ' %' },
       marks: [
         Plot.ruleY([0], { stroke: 'var(--line)' }),
@@ -580,8 +595,10 @@ function lineChart(target, opts) {
         ...rules.map((r) => Plot.ruleX([r.date], { stroke: 'var(--fg)', strokeDasharray: '3,3', strokeOpacity: 0.5 })),
         ...rules.map((r) => Plot.text([r], { x: 'date', frameAnchor: 'top', text: 'label', dy: -16, fill: 'var(--fg)', fontWeight: 500 })),
         Plot.dot(dots, { x: 'date', y: 'value', r: 2.5, fill: (d) => color(d.candidate), fillOpacity: (d) => 0.35 * fade(d) }),
-        Plot.line(flat, { x: 'date', y: 'value', z: 'candidate', stroke: (d) => color(d.candidate),
-          strokeWidth: (d) => (focusable && state.focus === d.candidate ? 3.5 : 2.25), strokeOpacity: fade, curve: 'monotone-x' }),
+        Plot.line(flat.filter((d) => dashed(d)), { x: 'date', y: 'value', z: 'candidate', stroke: (d) => color(d.candidate),
+          strokeWidth: 1.5, strokeDasharray: '4,3', strokeOpacity: fade, curve }),
+        Plot.line(flat.filter((d) => !dashed(d)), { x: 'date', y: 'value', z: 'candidate', stroke: (d) => color(d.candidate),
+          strokeWidth: (d) => (focusable && state.focus === d.candidate ? 3.5 : 2.25), strokeOpacity: fade, curve }),
         Plot.dot(extra, { x: 'date', y: 'value', symbol: 'diamond', r: 6, fill: (d) => color(d.candidate), stroke: 'var(--bg)', strokeWidth: 1.5, fillOpacity: fade }),
         Plot.text(labels, { x: 'date', y: 'y', text: (d) => d.candidate + ' ' + pct.format(d.value), dx: 8, textAnchor: 'start',
           fill: (d) => color(d.candidate), fontWeight: 600, fillOpacity: fade }),
@@ -652,17 +669,44 @@ function renderCharts() {
   const winner = e.results.get(e.decisive)[0].candidate;
   $('t-duel').textContent = 'Chance de victoire de ' + fullName(winner) + ', jour par jour';
   const rows = (data.duel || []).filter((r) => r.candidat === winner);
-  const pm = rows.filter((r) => r.polymarket != null).map((r) => ({ candidate: 'Polymarket', date: utc(r.jour), value: +r.polymarket }));
-  const sd = rows.filter((r) => r.proba_sondages != null).map((r) => ({ candidate: 'Sondages', date: utc(r.jour), value: +r.proba_sondages }));
+  const pm = rows.filter((r) => r.polymarket != null).map((r) => ({ candidate: 'L’argent', date: utc(r.jour), value: +r.polymarket }));
+  const sd = rows.filter((r) => r.proba_sondages != null).map((r) => ({ candidate: 'La rue', date: utc(r.jour), value: +r.proba_sondages }));
   if (!pm.length && !sd.length) {
     $('chart-duel').replaceChildren(el('p', 'empty', 'Pas assez de données pour suivre le duel jour par jour.'));
     return;
   }
   lineChart($('chart-duel'), {
-    series: [pm, sd].filter((s) => s.length), color: (c) => (c === 'Polymarket' ? 'var(--market)' : 'var(--polls)'),
+    series: [pm, sd].filter((s) => s.length), color: (c) => (c === 'L’argent' ? 'var(--market)' : 'var(--polls)'),
     yDomain: [0, 100], ruleY: 50, focusable: false, yLabel: '↑ chance de victoire', rules: [{ date: e.end, label: 'Vote' }],
     xDomain: [d3.min([...pm, ...sd], (d) => d.date), new Date(+e.end + 7 * DAY)],
     tip: (d) => d.candidate + ' : ' + pct.format(d.value) + ' %\n' + longDay.format(d.date),
+  });
+}
+
+// Nuit du vote : cotes des deux finalistes au pas de 10 minutes ; marchés locaux en pointillé.
+function renderNight() {
+  const { e, data } = view;
+  const box = $('sec-night');
+  box.hidden = !e.past || !data.night.length;
+  if (box.hidden) return;
+  const label = (r) => (r.serie === 'national' ? r.candidat : r.candidat + ' · ' + r.serie);
+  const series = [...new Set(data.night.map(label))].map((l) => data.night.filter((r) => label(r) === l)
+    .map((r) => ({ candidate: l, local: r.serie !== 'national', date: new Date(r.ts * 1000), value: r.price * 100 })));
+  const winner = e.results.get(e.decisive)[0].candidate;
+  const nat = series.find((s) => s[0].candidate === winner);
+  $('t-night').textContent = nat ? 'La nuit du vote\u00a0: ' + fullName(winner) + ' de ' + Math.round(nat[0].value) + ' % à '
+    + Math.round(nat.at(-1).value) + ' % sur Polymarket' : 'La nuit du vote';
+  const volumes = [...new Set(data.night.map((r) => r.serie))].map((serie) => {
+    const byCand = new Map(data.night.filter((r) => r.serie === serie).map((r) => [r.candidat, r.volume || 0]));
+    return [serie, [...byCand.values()].reduce((a, b) => a + b, 0)];
+  });
+  $('n-night').textContent = 'Cote de chaque finaliste toutes les 10 minutes, heure de Paris, du jour du vote au lendemain. '
+    + volumes.map(([serie, v]) => (serie === 'national' ? 'Marché national' : 'Marché « ' + serie + ' » (pointillé)') + '\u00a0: ' + usd(v) + ' échangés').join(' · ')
+    + (volumes.length > 1 ? '. Sur un petit marché, un seul gros ordre suffit à faire passer la cote de 0 à 100 %.' : '.');
+  lineChart($('chart-night'), {
+    series, color: (c) => colorOf(c.split(' · ')[0]), dashed: (d) => d.local, focusable: false, yDomain: [0, 100], ruleY: 50,
+    yLabel: '↑ chance de victoire', curve: 'step-after', xFormat: (d) => hour.format(d), ticks: 8,
+    tip: (d) => d.candidate + '\u00a0: ' + pct.format(d.value) + ' %\n' + dayHour.format(d.date),
   });
 }
 

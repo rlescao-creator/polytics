@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Polytics · Sondages contre marché</title>
-  <meta name="description" content="Sur chaque présidentielle depuis 2023, qui a le mieux prévu le vainqueur : les sondages ou Polymarket ?">
+  <title>Polytics · L’argent contre la rue</title>
+  <meta name="description" content="Ce que les gens disent aux sondeurs contre ce que les parieurs misent sur Polymarket : sur chaque présidentielle, qui a le mieux prévu le vainqueur ?">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap">
   <link rel="stylesheet" href="style.css">
@@ -22,12 +22,22 @@
     </header>
 
     <section class="score" aria-labelledby="t-score">
-      <p class="kicker" id="score-kicker">Le match</p>
-      <h1 id="t-score" class="sr-only">Sondages contre marché</h1>
+      <p class="kicker" id="score-kicker">L’argent contre la rue</p>
+      <h1 id="t-score" class="sr-only">L’argent contre la rue : sondages contre Polymarket</h1>
       <div class="board-score" id="board-score" aria-live="polite">
-        <div class="team polls"><span class="team-name">Sondages</span><span class="team-n" id="n-polls">–</span></div>
+        <div class="team polls">
+          <span class="team-name">La rue</span>
+          <span class="team-what">les sondages</span>
+          <span class="team-n" id="n-polls">–</span>
+          <span class="team-stake" id="stake-polls">&nbsp;</span>
+        </div>
         <span class="dash" aria-hidden="true">–</span>
-        <div class="team market"><span class="team-name">Marché</span><span class="team-n" id="n-market">–</span></div>
+        <div class="team market">
+          <span class="team-name">L’argent</span>
+          <span class="team-what">Polymarket</span>
+          <span class="team-n" id="n-market">–</span>
+          <span class="team-stake" id="stake-market">&nbsp;</span>
+        </div>
       </div>
       <p class="deck" id="deck"><span class="skel skel-text"></span></p>
     </section>
@@ -39,6 +49,11 @@
         <p class="note" id="n-last"></p>
       </div>
       <figure class="chart" id="chart-last"><div class="skel skel-chart"></div></figure>
+      <div class="night" id="night-last" hidden>
+        <h3 id="t-night">La nuit du vote</h3>
+        <p class="note" id="n-night"></p>
+        <figure class="chart chart-night" id="chart-night"></figure>
+      </div>
     </section>
 
     <section class="block" aria-labelledby="t-sheet">
@@ -48,8 +63,8 @@
         <p class="note">Les points : la chance donnée au vainqueur la veille du vote ; à droite du trait des 50 %, le favori était le bon. La colonne de droite compte toute la campagne, jour par jour : c’est elle qui fait le score. Cliquez sur une élection pour l’ouvrir.</p>
       </div>
       <div class="legend" aria-hidden="true">
-        <span><i class="swatch polls"></i>Sondages</span>
-        <span><i class="swatch market"></i>Polymarket</span>
+        <span><i class="swatch polls"></i>La rue (sondages)</span>
+        <span><i class="swatch market"></i>L’argent (Polymarket)</span>
         <span class="legend-zone">Zone grisée : bon favori</span>
       </div>
       <ol class="sheet" id="sheet"></ol>
@@ -77,6 +92,8 @@
     <footer class="method">
       <h2>Comment on compte</h2>
       <p><b>Le score</b> : pour chaque élection, l’erreur moyenne de chaque camp sur toute la campagne, jour par jour (score de Brier : l’écart au carré entre la chance donnée au vainqueur et 100 %). Le camp qui se trompe le moins gagne l’élection.</p>
+      <p><b>L’argent</b> : le volume d’un marché Polymarket, c’est le total des dollars échangés depuis son ouverture, achats et ventes, sur le « oui » comme sur le « non ». « 48 M$ sur Lula » veut dire 48 M$ échangés sur le marché « Lula gagne », pas 48 M$ pariés pour lui.</p>
+      <p><b>La rue</b> : le nombre de sondages publiés dans l’année avant le vote, et la somme de leurs échantillons. Certains instituts ne publient pas leur taille d’échantillon : le nombre de personnes interrogées est alors un minimum.</p>
       <p><b>Les sondages en probabilité</b> : l’écart moyen entre les deux finalistes dans les sondages de la dernière semaine connue, converti en chance de victoire avec une erreur type de 3,5 points. Polymarket : prix de la part « Oui ».</p>
       <p><b>Prudence</b> : <span id="caution">quelques élections, c’est peu</span>. Un score n’est pas une loi, et un camp peut gagner le match en se trompant de favori la veille.</p>
       <p><b>Sources</b> : sondages des listes de Wikipedia (CC BY-SA), cotes Polymarket, résultats officiels. Polymarket est bloqué en France par l’ANJ ; les cotes sont relevées depuis l’étranger.</p>

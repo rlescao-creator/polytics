@@ -113,6 +113,7 @@ def scheduled(con, args, data_dir):
             ("notices", lambda: notices.collect(con, data_dir / "notices")),
         ]
     steps.append(("bilans", lambda: refresh_bilans(con, elections)))
+    steps.append(("nuit", lambda: polymarket.collect_night(con, elections)))
     failed = []
     for name, run in steps:
         try:
@@ -157,6 +158,8 @@ def main():
         polymarket.collect(con, args.election)
     if args.command in ("all", "polls"):
         wikipedia_polls.collect(con, args.election)
+    if args.command in ("all", "polymarket"):
+        polymarket.collect_night(con, args.election)
     if args.command in ("all", "polymarket", "polls"):
         refresh_bilans(con, args.election)
     if args.command in ("all", "notices"):

@@ -1,7 +1,9 @@
-// Accueil « le match » : sondages contre Polymarket sur toutes les présidentielles passées.
+// Accueil « l'argent contre la rue » : ce que les gens disent aux sondeurs contre ce que les parieurs
+// misent sur Polymarket, sur toutes les présidentielles passées.
 // Score : pour chaque élection, le camp au plus petit score de Brier sur la campagne (même calcul que
 // bilan_previsions, à partir de bilan_quotidien). Veille : chance donnée au vainqueur le jour avant le vote.
-// Classement : agrégat de bilan_premier_a_voir (même calcul que classement_premier_a_voir).
+// Mises : dollars échangés (markets.volume) contre sondages publiés et personnes interrogées dans l'année.
+// Nuit du vote : nuit_electorale. Classement : agrégat de bilan_premier_a_voir (comme classement_premier_a_voir).
 // En direct : moyenne des sondages et cotes de l'élection en cours, comme sur election.html.
 const { supabaseUrl, supabaseKey, election: LIVE } = window.POLL_CONFIG;
 const db = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -10,20 +12,27 @@ const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 if (new URLSearchParams(location.search).has('e')) location.replace('election.html' + location.search);
 
 const DAY = 86400000;
-const WINDOW = 30;      // jours de terrain pris dans la moyenne en direct
+const WINDOW = 30;       // jours de terrain pris dans la moyenne en direct
 const MIN_POLLS = 3;
 const MIN_ELECTIONS = 2; // un institut entre au classement à partir de 2 élections
+const YEAR = 365;        // la rue : sondages publiés dans l'année avant le vote
 
 const $ = (id) => document.getElementById(id);
 const pct = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const dec2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+const int = new Intl.NumberFormat('fr-FR');
 const shortDay = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const month = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const hour = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+const dayHour = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
 const region = new Intl.DisplayNames(['fr'], { type: 'region' });
+const usd = (v) => compact.format(v) + ' $';
 const utc = (iso) => new Date(iso + 'T00:00:00Z');
 const isoDay = (d) => d.toISOString().slice(0, 10);
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length / 2;
@@ -35,7 +44,7 @@ const el = (tag, cls, text) => {
   if (text !== undefined) n.textContent = text;
   return n;
 };
-const CAMP = { polls: 'Sondages', market: 'Marché' };
+const CAMP = { polls: 'La rue', market: 'L’argent' };
 
 // PostgREST renvoie au plus 1 000 lignes : on lit par tranches.
 async function all(query) {
@@ -50,21 +59,41 @@ async function all(query) {
 
 async function load() {
   const since = isoDay(new Date(Date.now() - 120 * DAY));
-  const [elections, results, cands, daily, first, markets, polls] = await Promise.all([
+  const [elections, results, cands, daily, first, markets, livePolls, pollMeta] = await Promise.all([
     all(() => db.from('elections').select('id, country, election_date, second_round_date').order('id')),
     all(() => db.from('results').select('election_id, round, candidate, value').order('election_id')),
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
     all(() => db.from('bilan_quotidien').select('election_id, jour, candidat, polymarket, proba_sondages')
       .eq('gagnant', true).order('election_id').order('jour')),
     all(() => db.from('bilan_premier_a_voir').select('election_id, source, genre, juste, jours_avance').order('election_id').order('source')),
-    all(() => db.from('markets').select('candidate_name, last_price, closed').eq('election_id', LIVE).order('candidate_name')),
+    all(() => db.from('markets').select('election_id, candidate_name, volume, last_price, closed').order('condition_id')),
     all(() => db.from('polls').select('id, fieldwork_end, fieldwork_label, institute, poll_results(candidate, value)')
       .eq('election_id', LIVE).eq('round', 1).gte('fieldwork_end', since).order('id')),
+    all(() => db.from('polls').select('election_id, fieldwork_end, fieldwork_label, institute, sample_size').order('id')),
   ]);
   const people = new Map(cands.map((c) => [c.name, { full: c.full_name || c.name, color: c.parties && c.parties.color }]));
 
-  // Une ligne par élection passée : vainqueur, chances la veille, Brier de chaque camp.
+  // Les mises de chaque élection : dollars échangés sur tous ses marchés ; sondages publiés dans l'année
+  // avant le vote (un sondage = un institut et un terrain) et somme de leurs échantillons connus.
   const today = new Date();
+  const stakes = (e, end) => {
+    const polls = new Map();
+    pollMeta.filter((p) => p.election_id === e.id && utc(p.fieldwork_end) <= end && utc(p.fieldwork_end) > new Date(+end - YEAR * DAY))
+      .forEach((p) => {
+        const key = p.institute + '|' + p.fieldwork_label + '|' + p.fieldwork_end;
+        polls.set(key, Math.max(polls.get(key) || 0, p.sample_size || 0));
+      });
+    const sizes = [...polls.values()];
+    const named = new Map();
+    markets.filter((m) => m.election_id === e.id && m.candidate_name)
+      .forEach((m) => named.set(m.candidate_name, (named.get(m.candidate_name) || 0) + (m.volume || 0)));
+    return {
+      dollars: sum(markets.filter((m) => m.election_id === e.id).map((m) => m.volume || 0)), byCandidate: named,
+      polls: sizes.length, people: sum(sizes), partial: sizes.some((n) => !n),
+    };
+  };
+
+  // Une ligne par élection passée : vainqueur, chances la veille, Brier de chaque camp, mises.
   const matches = elections.map((e) => {
     const res = results.filter((r) => r.election_id === e.id);
     if (!res.length) return null;
@@ -75,11 +104,12 @@ async function load() {
     if (!days.length) return null;
     const eve = days.find((d) => d.jour === isoDay(new Date(+vote - DAY)));
     const brier = (key) => mean(days.map((d) => (1 - d[key] / 100) ** 2));
+    const final = res.filter((r) => r.round === round).sort((a, b) => b.value - a.value);
     const m = {
       id: e.id, country: region.of(e.country), year: e.id.split('-')[1], vote,
-      winner: days[0].candidat, share: res.filter((r) => r.round === round).sort((a, b) => b.value - a.value)[0].value,
+      winner: days[0].candidat, loser: final.find((r) => r.candidate !== days[0].candidat)?.candidate, share: final[0].value,
       evePolls: eve ? +eve.proba_sondages : null, eveMarket: eve ? +eve.polymarket : null,
-      brierPolls: brier('proba_sondages'), brierMarket: brier('polymarket'),
+      brierPolls: brier('proba_sondages'), brierMarket: brier('polymarket'), stakes: stakes(e, vote),
       series: days.map((d) => ({ date: utc(d.jour), polls: +d.proba_sondages, market: +d.polymarket })),
     };
     m.camp = m.brierPolls < m.brierMarket ? 'polls' : 'market';
@@ -102,7 +132,17 @@ async function load() {
     })
     .sort((a, b) => Math.round(b.avg) - Math.round(a.avg) || b.right - a.right);
 
-  return { people, matches, ranking, live: liveSummary(people, markets, polls) };
+  // Nuit du vote de la dernière élection (table absente ou vide : pas de graphique).
+  const night = matches[0]
+    ? await all(() => db.from('nuit_electorale').select('serie, candidat, volume, ts, price').eq('election_id', matches[0].id).order('ts'))
+      .catch(() => [])
+    : [];
+
+  const live = elections.find((e) => e.id === LIVE);
+  return {
+    people, matches, ranking, night,
+    live: { ...liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls), stakes: live ? stakes(live, today) : null },
+  };
 }
 
 // Élection en cours : même règle que la page élection (un sondage = un institut et un terrain,
@@ -128,99 +168,161 @@ function liveSummary(people, markets, rows) {
     .map(([candidate, v]) => ({ candidate, value: mean(v), n: v.length })).sort((a, b) => b.value - a.value).slice(0, 4);
   const best = new Map();
   markets.filter((m) => !m.closed && m.candidate_name && m.last_price != null).forEach((m) => {
-    if (!best.has(m.candidate_name) || best.get(m.candidate_name) < m.last_price) best.set(m.candidate_name, m.last_price);
+    const prev = best.get(m.candidate_name);
+    if (!prev || prev.price < m.last_price) best.set(m.candidate_name, { price: m.last_price, volume: m.volume });
   });
-  const marketTop = [...best].map(([candidate, p]) => ({ candidate, value: p * 100 })).sort((a, b) => b.value - a.value).slice(0, 4);
+  const marketTop = [...best].map(([candidate, b]) => ({ candidate, value: b.price * 100, volume: b.volume }))
+    .sort((a, b) => b.value - a.value).slice(0, 4);
   return { pollTop, marketTop, last };
 }
 
 // --- Rendu
+const peopleLine = (s) => (s.partial ? 'au moins ' : '') + compact.format(s.people) + ' personnes interrogées';
+
 function renderScore({ matches }) {
   const n = { polls: matches.filter((m) => m.camp === 'polls').length, market: matches.filter((m) => m.camp === 'market').length };
   const eve = {
     polls: matches.filter((m) => m.evePolls > 50).length, market: matches.filter((m) => m.eveMarket > 50).length,
     counted: matches.filter((m) => m.evePolls != null && m.eveMarket != null).length,
   };
+  const total = {
+    dollars: sum(matches.map((m) => m.stakes.dollars)), polls: sum(matches.map((m) => m.stakes.polls)),
+    people: sum(matches.map((m) => m.stakes.people)), partial: matches.some((m) => m.stakes.partial),
+  };
   $('n-polls').textContent = n.polls;
   $('n-market').textContent = n.market;
+  $('stake-polls').textContent = int.format(total.polls) + ' sondages · ' + peopleLine(total);
+  $('stake-market').textContent = usd(total.dollars) + ' échangés';
   const lead = n.polls === n.market ? null : n.polls > n.market ? 'polls' : 'market';
   $('board-score').className = 'board-score' + (lead ? ' lead-' + lead : '');
-  $('board-score').setAttribute('aria-label', 'Sondages ' + n.polls + ', marché ' + n.market);
+  $('board-score').setAttribute('aria-label', 'La rue ' + n.polls + ', l’argent ' + n.market);
   const since = Math.min(...matches.map((m) => +m.year));
-  $('score-kicker').textContent = 'Le match · ' + matches.length + ' présidentielles depuis ' + since;
+  $('score-kicker').textContent = 'L’argent contre la rue · ' + matches.length + ' présidentielles depuis ' + since;
   $('caution').textContent = matches.length + ' élections, c’est peu';
 
   const deck = $('deck');
   deck.replaceChildren();
   const b = (t, cls) => el('b', cls, t);
-  deck.append('Sur toute la campagne, ', lead ? b(lead === 'polls' ? 'les sondages' : 'le marché', lead + '-ink') : 'aucun camp',
-    lead ? ' se sont moins trompés que ' + (lead === 'polls' ? 'Polymarket' : 'les sondages') : ' ne se trompe moins que l’autre',
+  deck.append('D’un côté, ce que les gens disent aux sondeurs. De l’autre, ce que des parieurs misent en dollars sur Polymarket. ',
+    'Sur toute la campagne, ', lead ? b(lead === 'polls' ? 'la rue' : 'l’argent', lead + '-ink') : 'aucun camp',
+    lead ? ' s’est moins trompé' + (lead === 'polls' ? 'e' : '') + ' que ' + (lead === 'polls' ? 'l’argent' : 'la rue') : ' ne s’est moins trompé que l’autre',
     ' dans ' + Math.max(n.polls, n.market) + ' élections sur ' + matches.length + '. ');
   const eveLead = eve.polls === eve.market ? null : eve.polls > eve.market ? 'polls' : 'market';
-  const twist = eveLead && eveLead !== lead ? 'Mais la veille du vote, ' : 'La veille du vote, ';
-  deck.append(twist);
-  if (!eveLead) deck.append('égalité : les deux camps avaient le bon favori ' + eve.polls + ' fois sur ' + eve.counted + '.');
+  deck.append(eveLead && eveLead !== lead ? 'Mais la veille du vote, ' : 'La veille du vote, ');
+  if (!eveLead) deck.append('égalité : les deux avaient le bon favori ' + eve.polls + ' fois sur ' + eve.counted + '.');
   else {
-    deck.append(eveLead === 'market' ? 'c’est le marché qui avait le plus souvent le bon favori : ' : 'ce sont les sondages qui avaient le plus souvent le bon favori : ',
-      b(eve[eveLead] + ' fois sur ' + eve.counted, eveLead + '-ink'), ', contre ' + eve[eveLead === 'market' ? 'polls' : 'market'] + ' pour '
-      + (eveLead === 'market' ? 'les sondages.' : 'le marché.'));
+    deck.append(eveLead === 'market' ? 'c’est l’argent qui avait le plus souvent le bon favori : ' : 'c’est la rue qui avait le plus souvent le bon favori : ',
+      b(eve[eveLead] + ' fois sur ' + eve.counted, eveLead + '-ink'), ', contre ' + eve[eveLead === 'market' ? 'polls' : 'market'] + '.');
   }
 }
 
 function verdict(m) {
   const right = { polls: m.evePolls > 50, market: m.eveMarket > 50 };
-  const better = m.camp === 'polls' ? 'les sondages' : 'le marché';
-  if (right.polls && right.market) return m.country + ' : les deux avaient le bon favori, ' + better + ' plus tôt';
-  if (!right.polls && !right.market) return m.country + ' : les deux se sont trompés, ' + better + ' moins';
-  return m.country + ' : ' + (right.polls ? 'les sondages avaient vu juste, pas le marché' : 'le marché avait vu juste, pas les sondages');
+  const better = m.camp === 'polls' ? 'la rue' : 'l’argent';
+  if (right.polls && right.market) return m.country + ' : la rue et l’argent avaient le bon favori, ' + better + ' plus tôt';
+  if (!right.polls && !right.market) return m.country + ' : la rue et l’argent se sont trompés, ' + better + ' moins';
+  return m.country + ' : ' + (right.polls ? 'la rue avait vu juste, pas l’argent' : 'l’argent avait vu juste, pas la rue');
 }
 
-function renderLast({ people, matches }) {
-  const m = matches[0];
-  if (!m) return;
-  const name = people.get(m.winner)?.full || m.winner;
-  $('t-last').textContent = verdict(m);
-  const note = $('n-last');
-  note.replaceChildren(
-    'Chance de victoire donnée à ' + name + ' chaque jour, jusqu’au ' + shortDay.format(m.vote) + '. La veille : ',
-    el('b', 'polls-ink', 'sondages ' + pct.format(m.evePolls) + ' %'), ', ', el('b', 'market-ink', 'Polymarket ' + pct.format(m.eveMarket) + ' %'),
-    '. Résultat : ' + name + ' l’emporte avec ' + pct.format(m.share) + ' %. ');
-  const a = el('a', '', 'Toute l’élection →');
-  a.href = 'election.html?e=' + m.id;
-  note.append(a);
-
-  const start = new Date(+m.vote - 150 * DAY);
-  const pts = m.series.filter((d) => d.date >= start).flatMap((d) => [
-    { camp: 'Sondages', date: d.date, value: d.polls }, { camp: 'Polymarket', date: d.date, value: d.market }]);
-  const color = (c) => (c === 'Sondages' ? 'var(--polls)' : 'var(--market)');
-  const target = $('chart-last');
+function stepChart(target, { pts, color, domain, yLabel, tickFormat, ticks, rule, ruleLabel, tip, label }) {
   const draw = () => {
     const width = target.clientWidth;
     const narrow = width < 520;
-    const ends = ['Sondages', 'Polymarket'].map((c) => pts.filter((p) => p.camp === c).at(-1)).filter(Boolean)
-      .sort((x, y) => y.value - x.value);
-    if (ends.length === 2 && ends[0].value - ends[1].value < 9) ends[1] = { ...ends[1], y: ends[0].value - 9 };
+    const ends = [...new Set(pts.map((p) => p.serie))].map((s) => pts.filter((p) => p.serie === s).at(-1))
+      .sort((x, y) => y.value - x.value).map((d) => ({ ...d, y: d.value }));
+    for (let i = 1; i < ends.length; i++) if (ends[i - 1].y - ends[i].y < 9) ends[i].y = ends[i - 1].y - 9;
     target.replaceChildren(Plot.plot({
-      width, height: narrow ? 280 : 360, marginLeft: 40, marginRight: narrow ? 100 : 130, marginTop: 28,
+      width, height: narrow ? 280 : 340, marginLeft: 40, marginRight: narrow ? 112 : 150, marginTop: 28,
       style: { color: 'var(--muted)', background: 'transparent', fontSize: '12px' },
-      x: { type: 'utc', label: null, ticks: narrow ? 4 : 6, tickFormat: (d) => month.format(d), domain: [start, new Date(+m.vote + 3 * DAY)] },
-      y: { domain: [0, 100], label: '↑ chance de victoire de ' + m.winner, ticks: [0, 25, 50, 75, 100], tickFormat: (v) => v + ' %', grid: true },
+      x: { type: 'utc', label: null, ticks: narrow ? 4 : ticks, tickFormat, domain },
+      y: { domain: [0, 100], label: yLabel, ticks: [0, 25, 50, 75, 100], tickFormat: (v) => v + ' %', grid: true },
       marks: [
-        Plot.rectY([{ x1: start, x2: m.vote }], { x1: 'x1', x2: 'x2', y1: 50, y2: 100, fill: 'var(--track)', fillOpacity: 0.6 }),
+        Plot.rectY([{ x1: domain[0], x2: domain[1] }], { x1: 'x1', x2: 'x2', y1: 50, y2: 100, fill: 'var(--track)', fillOpacity: 0.6 }),
         Plot.ruleY([50], { stroke: 'var(--fg)', strokeOpacity: 0.6 }),
-        Plot.ruleX([m.vote], { stroke: 'var(--fg)', strokeDasharray: '3,3' }),
-        Plot.text([{ date: m.vote }], { x: 'date', frameAnchor: 'top', dy: -16, text: () => 'Vote', fill: 'var(--fg)', fontWeight: 700 }),
-        Plot.line(pts, { x: 'date', y: 'value', z: 'camp', stroke: (d) => color(d.camp), strokeWidth: 2.5, curve: 'step-after' }),
-        Plot.text(ends, { x: 'date', y: (d) => d.y ?? d.value, text: (d) => d.camp + ' ' + pct0.format(d.value) + ' %', dx: 8, textAnchor: 'start',
-          fill: (d) => color(d.camp), fontWeight: 700, fontSize: 13 }),
-        Plot.tip(pts, Plot.pointerX({ x: 'date', y: 'value', title: (d) => d.camp + ' : ' + pct.format(d.value) + ' %\n' + shortDay.format(d.date),
-          fill: 'var(--panel)', stroke: 'var(--line)' })),
+        ...(rule ? [Plot.ruleX([rule], { stroke: 'var(--fg)', strokeDasharray: '3,3' }),
+          Plot.text([{ date: rule }], { x: 'date', frameAnchor: 'top', dy: -16, text: () => ruleLabel, fill: 'var(--fg)', fontWeight: 700 })] : []),
+        Plot.line(pts.filter((d) => !d.dashed), { x: 'date', y: 'value', z: 'serie', stroke: (d) => color(d.serie), strokeWidth: 2.5, curve: 'step-after' }),
+        Plot.line(pts.filter((d) => d.dashed), { x: 'date', y: 'value', z: 'serie', stroke: (d) => color(d.serie), strokeWidth: 1.75,
+          strokeDasharray: '4,3', curve: 'step-after' }),
+        Plot.text(ends, { x: 'date', y: 'y', text: label, dx: 8, textAnchor: 'start', fill: (d) => color(d.serie), fontWeight: 700, fontSize: 13, lineWidth: 12 }),
+        Plot.tip(pts, Plot.pointerX({ x: 'date', y: 'value', title: tip, fill: 'var(--panel)', stroke: 'var(--line)' })),
       ],
     }));
   };
   draw();
   let w = target.clientWidth;
   new ResizeObserver(() => { if (target.clientWidth !== w) { w = target.clientWidth; draw(); } }).observe(target);
+}
+
+function renderLast({ people, matches, night }) {
+  const m = matches[0];
+  if (!m) return;
+  const name = (c) => people.get(c)?.full || c;
+  $('t-last').textContent = verdict(m);
+  const note = $('n-last');
+  const onWinner = m.stakes.byCandidate.get(m.winner);
+  const onLoser = m.stakes.byCandidate.get(m.loser);
+  note.replaceChildren('Chance de victoire donnée à ' + name(m.winner) + ' chaque jour, jusqu’au ' + shortDay.format(m.vote) + '. La veille : ',
+    el('b', 'polls-ink', 'la rue ' + pct.format(m.evePolls) + ' %'), ', ', el('b', 'market-ink', 'l’argent ' + pct.format(m.eveMarket) + ' %'),
+    '. Résultat : ' + name(m.winner) + ' l’emporte avec ' + pct.format(m.share) + ' %. ');
+  if (onWinner && onLoser) {
+    note.append('Sur Polymarket, ', el('b', '', usd(onWinner)), ' échangés sur le marché « ' + m.winner + ' gagne », ',
+      el('b', '', usd(onLoser)), ' sur « ' + m.loser + ' gagne ». ');
+  }
+  const a = el('a', '', 'Toute l’élection →');
+  a.href = 'election.html?e=' + m.id;
+  note.append(a);
+
+  const start = new Date(+m.vote - 150 * DAY);
+  const pts = m.series.filter((d) => d.date >= start).flatMap((d) => [
+    { serie: 'La rue', date: d.date, value: d.polls }, { serie: 'L’argent', date: d.date, value: d.market }]);
+  stepChart($('chart-last'), {
+    pts, color: (s) => (s === 'La rue' ? 'var(--polls)' : 'var(--market)'), domain: [start, new Date(+m.vote + 3 * DAY)],
+    yLabel: '↑ chance de victoire de ' + m.winner, ticks: 6, tickFormat: (d) => month.format(d), rule: m.vote, ruleLabel: 'Vote',
+    label: (d) => d.serie + ' ' + pct0.format(d.value) + ' %',
+    tip: (d) => d.serie + ' : ' + pct.format(d.value) + ' %\n' + shortDay.format(d.date),
+  });
+  renderNight(m, night, name);
+}
+
+// Nuit du vote : la cote du vainqueur au pas de 10 minutes, marché national et marchés locaux.
+function renderNight(m, night, name) {
+  const rows = night.filter((r) => r.candidat === m.winner);
+  if (!rows.length) return;
+  $('night-last').hidden = false;
+  const series = [...new Set(rows.map((r) => r.serie))];
+  const volume = new Map(series.map((s) => [s, sum([...new Set(night.filter((r) => r.serie === s).map((r) => r.candidat))]
+    .map((c) => night.find((r) => r.serie === s && r.candidat === c).volume || 0))]));
+  const label = (s) => (s === 'national' ? 'National' : s);
+  const pts = rows.map((r) => ({ serie: r.serie, date: new Date(r.ts * 1000), value: r.price * 100, dashed: r.serie !== 'national' }));
+  const nat = pts.filter((p) => p.serie === 'national');
+  if (nat.length) {
+    // Saut le plus net de la nuit : la plus forte hausse sur 3 heures, pour dater le moment où l'argent a basculé.
+    let jump = null;
+    nat.forEach((p, i) => {
+      const before = nat.find((q) => +q.date >= +p.date - 3 * 3600000);
+      if (before && (!jump || p.value - before.value > jump.gain)) jump = { from: before, to: p, gain: p.value - before.value };
+    });
+    $('t-night').textContent = 'La nuit du vote : ' + name(m.winner) + ' de ' + pct0.format(nat[0].value) + ' % à ' + pct0.format(nat.at(-1).value) + ' % sur Polymarket';
+    const n = $('n-night');
+    n.replaceChildren('Cote de ' + name(m.winner) + ' toutes les 10 minutes, heure de Paris. ');
+    if (jump && jump.gain >= 20) {
+      n.append('L’argent bascule entre ' + dayHour.format(jump.from.date) + ' et ' + hour.format(jump.to.date) + ' : ',
+        el('b', 'market-ink', pct0.format(jump.from.value) + ' % → ' + pct0.format(jump.to.value) + ' %'), ', au rythme du dépouillement. ');
+    }
+    const local = series.filter((s) => s !== 'national');
+    if (local.length) {
+      n.append('En pointillé, ' + local.map((s) => 'le marché « ' + s + ' » (' + usd(volume.get(s)) + ' échangés)').join(', ')
+        + ' : avec si peu d’argent, un seul gros ordre suffit à faire passer la cote de 0 à 100 %. Le marché national, lui, a brassé ',
+        el('b', '', usd(volume.get('national'))), '.');
+    }
+  }
+  const range = [d3.min(pts, (d) => d.date), d3.max(pts, (d) => d.date)];
+  stepChart($('chart-night'), {
+    pts, color: () => 'var(--market)', domain: range, yLabel: '↑ chance de victoire de ' + m.winner, ticks: 8,
+    tickFormat: (d) => hour.format(d), label: (d) => label(d.serie) + ' ' + pct0.format(d.value) + ' %',
+    tip: (d) => label(d.serie) + ' : ' + pct.format(d.value) + ' %\n' + dayHour.format(d.date),
+  });
 }
 
 function renderSheet({ people, matches }) {
@@ -230,7 +332,7 @@ function renderSheet({ people, matches }) {
   head.setAttribute('aria-hidden', 'true');
   const scale = el('div', 'scale');
   ['0 %', '50 %', '100 %'].forEach((t) => scale.append(el('span', '', t)));
-  head.append(el('span', '', 'Élection'), scale, el('span', 'r', 'Moins d’erreurs sur la campagne'));
+  head.append(el('span', '', 'Élection · mises'), scale, el('span', 'r', 'Moins d’erreurs (campagne)'));
   list.append(head);
   const tip = $('tip');
   matches.forEach((m) => {
@@ -238,12 +340,14 @@ function renderSheet({ people, matches }) {
     const a = el('a', 'match ' + m.camp);
     a.href = 'election.html?e=' + m.id;
     const name = people.get(m.winner)?.full || m.winner;
-    const desc = m.country + ' ' + m.year + ', vainqueur : ' + name + '. La veille : sondages ' + pct.format(m.evePolls) + ' %, Polymarket '
-      + pct.format(m.eveMarket) + ' %. Erreur sur la campagne (Brier) : sondages ' + dec2.format(m.brierPolls) + ', marché ' + dec2.format(m.brierMarket) + '.';
-    a.setAttribute('aria-label', desc);
+    const s = m.stakes;
+    a.setAttribute('aria-label', m.country + ' ' + m.year + ', vainqueur : ' + name + '. La veille : la rue ' + pct.format(m.evePolls)
+      + ' %, l’argent ' + pct.format(m.eveMarket) + ' %. ' + usd(s.dollars) + ' échangés, ' + s.polls + ' sondages. Moins d’erreurs : ' + CAMP[m.camp] + '.');
 
     const who = el('span', 'who-match');
-    who.append(el('span', 'country', m.country), el('span', 'meta', m.year + ' · ' + name));
+    const stakes = el('span', 'stakes');
+    stakes.append(el('span', 'market-ink', usd(s.dollars)), ' · ', el('span', 'polls-ink', s.polls + ' sondages'));
+    who.append(el('span', 'country', m.country), el('span', 'meta', m.year + ' · ' + name), stakes);
     const strip = el('span', 'strip');
     strip.append(el('span', 'zone'), el('span', 'mid'));
     const lo = Math.min(m.evePolls, m.eveMarket);
@@ -264,9 +368,9 @@ function renderSheet({ people, matches }) {
 
     const show = (x, y) => {
       tip.replaceChildren(el('b', '', m.country + ' ' + m.year + ' · ' + name),
-        el('span', 'polls-ink', 'Sondages, la veille : ' + pct.format(m.evePolls) + ' %'),
-        el('span', 'market-ink', 'Polymarket, la veille : ' + pct.format(m.eveMarket) + ' %'),
-        el('span', '', 'Erreur sur la campagne : sondages ' + dec2.format(m.brierPolls) + ', marché ' + dec2.format(m.brierMarket)));
+        el('span', 'polls-ink', 'La rue, la veille : ' + pct.format(m.evePolls) + ' % · ' + s.polls + ' sondages, ' + peopleLine(s)),
+        el('span', 'market-ink', 'L’argent, la veille : ' + pct.format(m.eveMarket) + ' % · ' + usd(s.dollars) + ' échangés'),
+        el('span', '', 'Erreur sur la campagne : la rue ' + dec2.format(m.brierPolls) + ', l’argent ' + dec2.format(m.brierMarket)));
       tip.hidden = false;
       const r = tip.getBoundingClientRect();
       tip.style.left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x + 14)) + 'px';
@@ -284,9 +388,11 @@ function renderSheet({ people, matches }) {
 function renderLive({ people, live }) {
   const cols = $('live-cols');
   cols.replaceChildren();
-  $('n-live').textContent = 'Pas encore de vainqueur à prévoir : voici où en sont les deux camps. Attention, ce ne sont pas les mêmes chiffres.';
-  [['polls', 'Sondages', 'intentions de vote au 1er tour, moyenne 30 jours', live.pollTop],
-   ['market', 'Polymarket', 'chance de gagner l’élection', live.marketTop]].forEach(([camp, title, sub, rows]) => {
+  const s = live.stakes;
+  $('n-live').textContent = 'Pas encore de vainqueur à prévoir : voici où en sont les deux camps. Attention, ce ne sont pas les mêmes chiffres.'
+    + (s ? ' Déjà ' + usd(s.dollars) + ' échangés sur Polymarket, et ' + s.polls + ' sondages publiés en un an (' + peopleLine(s) + ').' : '');
+  [['polls', 'La rue', 'intentions de vote au 1er tour, moyenne 30 jours', live.pollTop],
+   ['market', 'L’argent', 'chance de gagner selon Polymarket · dollars échangés', live.marketTop]].forEach(([camp, title, sub, rows]) => {
     const col = el('div', 'live-col ' + camp);
     col.append(el('h3', '', title), el('p', 'live-sub', sub));
     const ol = el('ol');
@@ -295,7 +401,9 @@ function renderLive({ people, live }) {
       const li = el('li');
       const bar = el('span', 'live-bar');
       bar.style.width = (100 * r.value / max) + '%';
-      li.append(el('span', 'live-name', people.get(r.candidate)?.full || r.candidate), el('span', 'live-v', pct.format(r.value) + ' %'), bar);
+      const v = el('span', 'live-v', pct.format(r.value) + ' %');
+      if (r.volume) v.append(el('small', '', usd(r.volume)));
+      li.append(el('span', 'live-name', people.get(r.candidate)?.full || r.candidate), v, bar);
       ol.append(li);
     });
     col.append(ol);
@@ -309,7 +417,8 @@ function renderRanking({ ranking }) {
   const max = Math.max(...ranking.map((r) => r.avg), 1);
   ranking.forEach((r) => {
     const li = el('li', 'src' + (r.genre === 'marché' ? ' market' : r.genre === 'moyenne' ? ' polls' : ''));
-    const name = el('span', 'src-name', r.source);
+    const title = r.genre === 'marché' ? 'L’argent · Polymarket' : r.genre === 'moyenne' ? 'La rue · moyenne des sondages' : r.source;
+    const name = el('span', 'src-name', title);
     name.append(el('small', '', r.right + ' élection' + (r.right > 1 ? 's' : '') + ' sur ' + r.elections + ' vue' + (r.right > 1 ? 's' : '')
       + ' juste' + (r.right > 1 ? 's' : '') + ' · médiane ' + pct0.format(r.med) + ' j'));
     const track = el('div', 'track');
