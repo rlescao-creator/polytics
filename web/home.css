@@ -85,31 +85,3 @@
   .lean-list li { grid-template-columns: 9em minmax(0, 1fr) 2.6em; }
   .lean-axis { margin: 0 calc(2.6em + 8px) 0 calc(9em + 8px); }
 }
-
-/* Depuis quand le savaient-ils : une barre par camp, du jour où il a désigné le vainqueur jusqu'au vote */
-.knew-sec[hidden] { display: none; }
-.knew-score { justify-content: flex-start; }
-.knew-score .cd-team { align-items: flex-start; }
-.knew { list-style: none; margin: 0; padding: 0; }
-.knew-head, .knew-row { display: grid; grid-template-columns: minmax(130px, 14em) minmax(0, 1fr) 6.5em; gap: 16px; align-items: center; }
-.knew-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-  padding-bottom: 6px; border-bottom: 1px solid var(--fg); }
-.knew-head .scale { display: flex; justify-content: space-between; }
-.knew-row { padding: 9px 0; border-bottom: 1px solid var(--line); }
-.knew-who { display: flex; flex-direction: column; min-width: 0; }
-.knew-who .country { font-size: 17px; }
-.knew-who small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.knew-track { position: relative; height: 24px; background: linear-gradient(90deg, transparent calc(50% - .5px), var(--line) calc(50% - .5px), var(--line) calc(50% + .5px), transparent calc(50% + .5px)); }
-.knew-track::after { content: ""; position: absolute; right: 0; top: -4px; bottom: -4px; width: 2px; background: var(--fg); }
-.knew-bar { position: absolute; right: 0; }
-.knew-bar.market { top: 2px; height: 11px; background: var(--market); }
-.knew-bar.polls { top: 15px; height: 7px; background: var(--polls); }
-.knew-bar.opening { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--bg) 70%, transparent); }
-.knew-vals { display: flex; flex-direction: column; align-items: flex-end; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.knew-vals .never { font-weight: 500; opacity: .6; }
-@media (max-width: 640px) {
-  .knew-head, .knew-row { grid-template-columns: minmax(0, 1fr) 4.6em; gap: 6px 12px; }
-  .knew-head > span:first-child, .knew-head > span:last-child { display: none; }
-  .knew-head .scale { grid-column: 1 / -1; }
-  .knew-row .knew-track { grid-column: 1 / -1; grid-row: 2; }
-}

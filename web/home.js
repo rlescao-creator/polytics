@@ -2,8 +2,7 @@
 // misent les parieurs de Polymarket, sur toutes les présidentielles passées.
 // Compte à rebours : à J-d, le favori de chaque camp (bilan_favoris) a-t-il gagné ? Comparé à 2027.
 // Veille : chance donnée au vainqueur le jour avant le vote (bilan_quotidien). Gauche ou droite : écart des
-// sondages sur le candidat le plus à droite. Nuit du vote : nuit_electorale. Classement : agrégat de
-// bilan_premier_a_voir (comme classement_premier_a_voir).
+// sondages sur le candidat le plus à droite. Nuit du vote : nuit_electorale.
 const { supabaseUrl, supabaseKey, election: LIVE, exclus = [], plusADroite = {} } = window.POLL_CONFIG;
 const EXCLUDED = new Set(exclus);
 const db = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -59,14 +58,12 @@ async function all(query) {
 
 async function load() {
   const since = isoDay(new Date(Date.now() - 120 * DAY));
-  const [elections, results, cands, daily, first, markets, livePolls, favoris] = await Promise.all([
+  const [elections, results, cands, daily, markets, livePolls, favoris] = await Promise.all([
     all(() => db.from('elections').select('id, country, election_date, second_round_date').order('id')),
     all(() => db.from('results').select('election_id, round, candidate, value').order('election_id')),
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
     all(() => db.from('bilan_quotidien').select('election_id, jour, candidat, polymarket, proba_sondages, part_sondages')
       .eq('gagnant', true).order('election_id').order('jour')),
-    all(() => db.from('bilan_premier_a_voir').select('election_id, genre, juste, jours_avance, premier, voit_depuis')
-      .in('genre', ['marché', 'moyenne']).order('election_id').order('genre')),
     all(() => db.from('markets').select('election_id, candidate_name, volume, last_price, closed').order('condition_id')),
     all(() => db.from('polls').select('id, fieldwork_end, fieldwork_label, institute, poll_results(candidate, value)')
       .eq('election_id', LIVE).eq('round', 1).gte('fieldwork_end', since).order('id')),
@@ -110,16 +107,7 @@ async function load() {
     return m;
   }).filter(Boolean).sort((a, b) => b.vote - a.vote);
 
-  // Depuis quand chaque camp plaçait le futur vainqueur devant son adversaire final, sans plus changer d'avis.
-  // « Dès l'ouverture » : le jour où commencent les données (première cote ou premier sondage du duel).
   const counted = matches.filter((m) => !m.excluded);
-  const knew = counted.map((m) => {
-    const pick = (genre) => {
-      const f = first.find((r) => r.election_id === m.id && r.genre === genre);
-      return f ? { days: f.juste ? f.jours_avance : null, opening: !!f.juste && f.voit_depuis === f.premier } : null;
-    };
-    return { m, market: pick('marché'), polls: pick('moyenne') };
-  }).filter((k) => k.market || k.polls);
 
   // Nuit du vote de la dernière élection (table absente ou vide : pas de graphique).
   const night = matches[0]
@@ -130,7 +118,7 @@ async function load() {
   const live = elections.find((e) => e.id === LIVE);
   const liveVote = live && (live.second_round_date || live.election_date);
   return {
-    people, matches, counted, knew, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
+    people, matches, counted, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
     live: liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls),
   };
 }
@@ -269,59 +257,6 @@ function renderNight(m, night, name) {
     pts, color: () => 'var(--market)', domain: range, yLabel: '↑ chance de victoire de ' + m.winner, ticks: 8,
     tickFormat: (d) => hour.format(d), label: (d) => label(d.serie) + ' ' + pct0.format(d.value) + ' %',
     tip: (d) => label(d.serie) + ' : ' + pct.format(d.value) + ' %\n' + dayHour.format(d.date),
-  });
-}
-
-// --- Depuis quand le savaient-ils : une ligne par élection, une barre par camp, du jour où il a désigné le
-// futur vainqueur (sans plus changer d'avis) jusqu'au vote.
-function renderKnew({ knew, people }) {
-  if (!knew.length) return;
-  $('sec-knew').hidden = false;
-  const found = (camp) => knew.filter((k) => k[camp]?.days != null).length;
-  const n = knew.length;
-  const fm = found('market');
-  const fp = found('polls');
-  $('knew-market').textContent = fm + '/' + n;
-  $('knew-polls').textContent = fp + '/' + n;
-  let earlier = 0; let later = 0; let same = 0;
-  knew.forEach((k) => {
-    const a = k.market?.days; const b = k.polls?.days;
-    if (a == null && b == null) return;
-    if (b == null || (a != null && a - b > 3)) earlier += 1;
-    else if (a == null || b - a > 3) later += 1;
-    else same += 1;
-  });
-  $('t-knew').textContent = fm > fp ? 'Polymarket trouve le vainqueur plus souvent que les sondages'
-    : fm < fp ? 'Les sondages trouvent le vainqueur plus souvent que Polymarket' : 'Polymarket et les sondages trouvent autant de vainqueurs';
-  $('n-knew').textContent = 'Plus tôt que les sondages dans ' + earlier + ' élection' + (earlier > 1 ? 's' : '') + ', plus tard dans '
-    + later + ', en même temps (à 3 jours près) dans ' + same + '.';
-
-  const max = Math.ceil(Math.max(...knew.flatMap((k) => [k.market?.days ?? 0, k.polls?.days ?? 0])) / 50) * 50 || 50;
-  const list = $('knew');
-  list.replaceChildren();
-  const head = el('li', 'knew-head');
-  head.setAttribute('aria-hidden', 'true');
-  const scale = el('div', 'scale');
-  [max, max / 2, 0].forEach((d) => scale.append(el('span', '', d ? 'J-' + d : 'vote')));
-  head.append(el('span', ''), scale, el('span', ''));
-  list.append(head);
-  [...knew].sort((a, b) => (b.market?.days ?? -1) - (a.market?.days ?? -1) || (b.polls?.days ?? -1) - (a.polls?.days ?? -1)).forEach((k) => {
-    const li = el('li', 'knew-row');
-    const who = el('span', 'knew-who');
-    who.append(el('span', 'country', k.m.country + ' ' + k.m.year.slice(2)), el('small', '', '→ ' + (people.get(k.m.winner)?.full || k.m.winner)));
-    const track = el('span', 'knew-track');
-    const vals = el('span', 'knew-vals');
-    [['market', 'Polymarket'], ['polls', 'médias']].forEach(([camp, label]) => {
-      const f = k[camp];
-      const bar = el('i', 'knew-bar ' + camp + (f?.opening ? ' opening' : ''));
-      bar.style.width = (f?.days != null ? Math.max(0.6, 100 * f.days / max) : 0) + '%';
-      track.append(bar);
-      vals.append(el('span', camp + '-ink' + (f?.days == null ? ' never' : ''), f?.days == null ? 'jamais' : f.days + ' j'));
-      bar.title = label + (f?.days == null ? ' : n’a jamais placé le vainqueur devant durablement'
-        : ' : vainqueur devant depuis ' + f.days + ' jours avant le vote' + (f.opening ? ', dès le début des données' : ''));
-    });
-    li.append(who, track, vals);
-    list.append(li);
   });
 }
 
@@ -494,14 +429,8 @@ function renderLean({ counted, matches }) {
   box.append(list, axis);
 }
 
-function skeleton() {
-  $('knew').replaceChildren(...Array.from({ length: 6 }, () => el('li', 'skel skel-line')));
-}
-
-skeleton();
 load().then((data) => {
   renderCountdown({ ...data, matches: data.counted, excluded: data.matches.filter((m) => m.excluded) });
-  renderKnew(data);
   renderLast(data);
   renderLean(data);
 }).catch((err) => {
