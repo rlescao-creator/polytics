@@ -16,6 +16,7 @@ const DAY = 86400000;
 const WINDOW = 30;       // jours de terrain pris dans la moyenne en direct
 const MIN_POLLS = 3;
 const MIN_ELECTIONS = 2; // un institut entre au classement à partir de 2 élections
+const HORIZON = 100;     // compte à rebours : jours avant le vote comparés
 const YEAR = 365;        // la rue : sondages publiés dans l'année avant le vote
 
 const $ = (id) => document.getElementById(id);
@@ -23,7 +24,6 @@ const pct = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFr
 const pct0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const dec2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
-const int = new Intl.NumberFormat('fr-FR');
 const shortDay = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const month = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const hour = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
@@ -192,42 +192,6 @@ function liveSummary(people, markets, rows) {
 
 // --- Rendu
 const peopleLine = (s) => (s.partial ? 'au moins ' : '') + compact.format(s.people) + ' personnes interrogées';
-
-function renderScore({ matches }) {
-  const n = { polls: matches.filter((m) => m.camp === 'polls').length, market: matches.filter((m) => m.camp === 'market').length };
-  const eve = {
-    polls: matches.filter((m) => m.evePolls > 50).length, market: matches.filter((m) => m.eveMarket > 50).length,
-    counted: matches.filter((m) => m.evePolls != null && m.eveMarket != null).length,
-  };
-  const total = {
-    dollars: sum(matches.map((m) => m.stakes.dollars)), polls: sum(matches.map((m) => m.stakes.polls)),
-    people: sum(matches.map((m) => m.stakes.people)), partial: matches.some((m) => m.stakes.partial),
-  };
-  $('n-polls').textContent = n.polls;
-  $('n-market').textContent = n.market;
-  $('stake-polls').textContent = int.format(total.polls) + ' sondages · ' + peopleLine(total);
-  $('stake-market').textContent = usd(total.dollars) + ' échangés';
-  const lead = n.polls === n.market ? null : n.polls > n.market ? 'polls' : 'market';
-  $('board-score').className = 'board-score' + (lead ? ' lead-' + lead : '');
-  $('board-score').setAttribute('aria-label', 'La rue ' + n.polls + ', l’argent ' + n.market);
-  const since = Math.min(...matches.map((m) => +m.year));
-  $('score-kicker').textContent = 'L’argent contre la rue · ' + matches.length + ' présidentielles depuis ' + since;
-  $('caution').textContent = matches.length + ' élections, c’est peu';
-
-  const deck = $('deck');
-  deck.replaceChildren();
-  const b = (t, cls) => el('b', cls, t);
-  deck.append('Sur toute la campagne, ', lead ? b(lead === 'polls' ? 'la rue' : 'l’argent', lead + '-ink') : 'aucun camp',
-    lead ? ' s’est moins trompé' + (lead === 'polls' ? 'e' : '') + ' que ' + (lead === 'polls' ? 'l’argent' : 'la rue') : ' ne s’est moins trompé que l’autre',
-    ' dans ' + Math.max(n.polls, n.market) + ' élections sur ' + matches.length + '. ');
-  const eveLead = eve.polls === eve.market ? null : eve.polls > eve.market ? 'polls' : 'market';
-  deck.append(eveLead && eveLead !== lead ? 'Mais la veille du vote, ' : 'La veille du vote, ');
-  if (!eveLead) deck.append('égalité : les deux avaient le bon favori ' + eve.polls + ' fois sur ' + eve.counted + '.');
-  else {
-    deck.append(eveLead === 'market' ? 'c’est l’argent qui avait le plus souvent le bon favori : ' : 'c’est la rue qui avait le plus souvent le bon favori : ',
-      b(eve[eveLead] + ' fois sur ' + eve.counted, eveLead + '-ink'), ', contre ' + eve[eveLead === 'market' ? 'polls' : 'market'] + '.');
-  }
-}
 
 function verdict(m) {
   const right = { polls: m.evePolls > 50, market: m.eveMarket > 50 };
@@ -443,6 +407,13 @@ function renderRanking({ ranking }) {
 // bilan_favoris donne, à la ligne d, la cote d'avant le jour J-d (la veille au soir de J-d) : la cote à la fin
 // de J-d est donc à la ligne d-1, comme la cote « la veille » de bilan_quotidien. Les sondages restent ceux
 // terminés avant J-d.
+// Étiquette discrète d'une barre rouge ou bleue : dans la barre si elle est assez longue, sinon juste après.
+function srcLabel(camp, width) {
+  const label = el('span', 'src-label' + (width >= 35 ? ' in' : ''), camp === 'polls' ? 'médias' : 'Polymarket');
+  if (width < 35) label.style.left = 'calc(' + width + '% + 4px)';
+  return label;
+}
+
 function favoriteAt(favoris, matches, d) {
   return matches.map((m) => {
     const row = (k) => favoris.find((f) => f.election_id === m.id && f.jours === k);
@@ -468,8 +439,9 @@ function renderCountdown(data) {
   const J = Math.round((liveVote - today) / DAY);
   if (J < 1) return;
   $('sec-countdown').hidden = false;
-  $('cd-sub').textContent = 'avant le 2nd tour · ' + longDate.format(liveVote);
-  const max = Math.min(365, Math.max(...favoris.map((f) => f.jours)));
+  $('cd-sub').textContent = 'avant le vote · 2027\u00a0: J-' + J + ' aujourd’hui, 2nd tour le ' + longDate.format(liveVote);
+  // Au-delà de J-100, trop d'élections n'ont encore ni marché ni assez de sondages pour comparer.
+  const max = Math.min(HORIZON, Math.max(...favoris.map((f) => f.jours)));
 
   // 2027 aujourd'hui, en une ligne.
   const p = live.pollTop[0];
@@ -506,8 +478,8 @@ function renderCountdown(data) {
       x: { domain: [max, 0], label: null, tickFormat: (d) => 'J-' + d, ticks: narrow ? 4 : 8 },
       y: { domain: [0, 100], label: null, ticks: [0, 50, 100], tickFormat: (v) => v + ' %', grid: true },
       marks: [
-        Plot.ruleX([J], { stroke: 'var(--fg)', strokeWidth: 2 }),
-        Plot.text([{ d: J }], { x: 'd', frameAnchor: 'top', dy: -14, text: () => '2027', fill: 'var(--fg)', fontWeight: 800 }),
+        ...(J <= max ? [Plot.ruleX([J], { stroke: 'var(--fg)', strokeWidth: 2 }),
+          Plot.text([{ d: J }], { x: 'd', frameAnchor: 'top', dy: -14, text: () => '2027', fill: 'var(--fg)', fontWeight: 800 })] : []),
         ...(selected !== J ? [Plot.ruleX([selected], { stroke: 'var(--fg)', strokeDasharray: '3,3' })] : []),
         Plot.line(curve, { x: 'd', y: 'value', z: 'serie', stroke: (q) => color(q.serie), strokeWidth: 2.5, curve: 'step-after' }),
         Plot.text(ends, { x: 'd', y: 'value', text: 'serie', dx: 8, textAnchor: 'start', fill: (q) => color(q.serie), fontWeight: 800 }),
@@ -545,7 +517,7 @@ function renderCountdown(data) {
         const fill = el('i');
         fill.style.width = (f ? f.value : 0) + '%';
         bar.append(fill);
-        row.append(el('span', 'cd-name', f ? f.name : '—'), bar, el('span', 'cd-v', f ? pct0.format(f.value) + ' %' : ''),
+        row.append(el('span', 'cd-name', f ? f.name : '—'), bar, el('small', 'cd-src', camp === 'polls' ? 'médias' : 'Polymarket'), el('span', 'cd-v', f ? pct0.format(f.value) + ' %' : ''),
           el('span', 'cd-mark', f ? (f.right ? '✓' : '✗') : ''));
         row.setAttribute('aria-label', label + ' : ' + (f ? f.name + ' ' + pct0.format(f.value) + ' %, ' + (f.right ? 'a gagné' : 'a perdu') : 'pas de données'));
         row.title = row.getAttribute('aria-label');
@@ -570,6 +542,7 @@ function renderCountdown(data) {
 
 // --- Ce que disent les chiffres : trois encadrés, chacun calculé, titre compris.
 function renderInsights({ counted, matches, favoris }) {
+  $('caution').textContent = counted.length + ' élections, c’est peu';
   const out = matches.filter((m) => m.excluded);
   $('excluded-note').textContent = out.length
     ? out.map((m) => m.country + ' ' + m.year).join(', ') + ' écarté' + (out.length > 1 ? 's' : '') + ' des totaux des deux camps'
@@ -599,7 +572,7 @@ function renderInsights({ counted, matches, favoris }) {
         const bar = el('span', 'm-bar ' + camp);
         const fill = el('i');
         fill.style.width = 100 * rate(t) + '%';
-        bar.append(fill);
+        bar.append(fill, srcLabel(camp, 100 * rate(t)));
         grid.append(bar, el('b', 'm-n ' + camp + '-ink', t.n ? t.right + '/' + t.n : '–'));
       });
     });
@@ -658,7 +631,6 @@ function skeleton() {
 
 skeleton();
 load().then((data) => {
-  renderScore({ ...data, matches: data.counted });
   renderCountdown({ ...data, matches: data.counted, excluded: data.matches.filter((m) => m.excluded) });
   renderInsights(data);
   renderLast(data);
@@ -666,9 +638,11 @@ load().then((data) => {
   renderLive(data);
   renderRanking(data);
 }).catch((err) => {
-  $('deck').replaceChildren('Données indisponibles : ' + (err.message || err) + '. ');
+  const status = $('status');
+  status.hidden = false;
+  status.replaceChildren('Données indisponibles\u00a0: ' + (err.message || err) + '. ');
   const retry = el('button', 'link', 'Réessayer');
   retry.type = 'button';
   retry.addEventListener('click', () => location.reload());
-  $('deck').append(retry);
+  status.append(retry);
 });

@@ -112,7 +112,7 @@
   background: var(--fg); color: var(--bg); padding: 2px 7px; margin-right: 6px; }
 .chart-cd { min-height: 0; }
 .cd-slider { display: grid; grid-template-columns: minmax(0, 1fr) 7.5em; align-items: center; gap: 12px; margin-top: -8px; }
-.cd-slider input { width: 100%; accent-color: var(--fg); }
+.cd-slider input { width: 100%; accent-color: var(--fg); direction: rtl; }  /* J-100 à gauche, comme sur la courbe */
 .cd-slider output { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; text-transform: uppercase; text-align: right; }
 .cd-legend { font-weight: 500; }
 .cd-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 24px; }
@@ -173,3 +173,11 @@
 .match.excluded { opacity: .45; }
 .match.excluded .camp-name { color: var(--muted); font-size: 14px; }
 .cd-card.excluded .cd-card-head::after { content: "hors décompte"; }
+
+/* Étiquettes discrètes des barres : médias, Polymarket */
+.src-label { position: absolute; top: 50%; left: 5px; transform: translateY(-50%); font-size: 9px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; line-height: 1; white-space: nowrap; color: var(--muted); pointer-events: none; }
+.src-label.in { color: #fff; opacity: .85; }
+.cd-row { grid-template-rows: auto 6px auto; }
+.cd-src { grid-column: 1; grid-row: 3; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); line-height: 1.2; }
+.cd-v, .cd-mark { grid-row: 1 / 4; }

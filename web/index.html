@@ -21,26 +21,8 @@
       </nav>
     </header>
 
-    <section class="score" aria-labelledby="t-score">
-      <p class="kicker" id="score-kicker">L’argent contre la rue</p>
-      <h1 id="t-score" class="sr-only">L’argent contre la rue : sondages contre Polymarket</h1>
-      <div class="board-score" id="board-score" aria-live="polite">
-        <div class="team polls">
-          <span class="team-name">La rue</span>
-          <span class="team-what">les sondages</span>
-          <span class="team-n" id="n-polls">–</span>
-          <span class="team-stake" id="stake-polls">&nbsp;</span>
-        </div>
-        <span class="dash" aria-hidden="true">–</span>
-        <div class="team market">
-          <span class="team-name">L’argent</span>
-          <span class="team-what">Polymarket</span>
-          <span class="team-n" id="n-market">–</span>
-          <span class="team-stake" id="stake-market">&nbsp;</span>
-        </div>
-      </div>
-      <p class="deck" id="deck"><span class="skel skel-text"></span></p>
-    </section>
+    <h1 class="sr-only">L’argent contre la rue : les sondages face à Polymarket</h1>
+    <p class="status" id="status" role="status" hidden></p>
 
     <section class="block countdown" aria-labelledby="t-countdown" id="sec-countdown" hidden>
       <div class="block-head">
@@ -64,8 +46,8 @@
         <output id="cd-out" for="cd-range"></output>
       </label>
       <div class="legend cd-legend" aria-hidden="true">
-        <span><i class="swatch polls"></i>La rue : % d’intentions de vote du candidat en tête</span>
-        <span><i class="swatch market"></i>L’argent : % de chances du favori</span>
+        <span><i class="swatch polls"></i>Médias : % d’intentions de vote du candidat en tête des sondages</span>
+        <span><i class="swatch market"></i>Polymarket : % de chances du favori</span>
         <span>✓ a gagné · ✗ a perdu</span>
       </div>
       <ol class="cd-grid" id="cd-grid"></ol>
