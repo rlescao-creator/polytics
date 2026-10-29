@@ -5,7 +5,8 @@
 // Mises : dollars échangés (markets.volume) contre sondages publiés et personnes interrogées dans l'année.
 // Nuit du vote : nuit_electorale. Classement : agrégat de bilan_premier_a_voir (comme classement_premier_a_voir).
 // En direct : moyenne des sondages et cotes de l'élection en cours, comme sur election.html.
-const { supabaseUrl, supabaseKey, election: LIVE } = window.POLL_CONFIG;
+const { supabaseUrl, supabaseKey, election: LIVE, exclus = [], plusADroite = {} } = window.POLL_CONFIG;
+const EXCLUDED = new Set(exclus);
 const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // Anciennes adresses (?e=…) : la page élection a déménagé.
@@ -33,6 +34,10 @@ const utc = (iso) => new Date(iso + 'T00:00:00Z');
 const isoDay = (d) => d.toISOString().slice(0, 10);
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+const signed1 = (v) => {
+  const r = Math.round(v * 10) / 10;
+  return (r > 0 ? '+' : r < 0 ? '−' : '') + pct.format(Math.abs(r));
+};
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length / 2;
@@ -63,7 +68,7 @@ async function load() {
     all(() => db.from('elections').select('id, country, election_date, second_round_date').order('id')),
     all(() => db.from('results').select('election_id, round, candidate, value').order('election_id')),
     all(() => db.from('candidates').select('name, full_name, parties(color)').eq('kind', 'personne').order('name')),
-    all(() => db.from('bilan_quotidien').select('election_id, jour, candidat, polymarket, proba_sondages')
+    all(() => db.from('bilan_quotidien').select('election_id, jour, candidat, polymarket, proba_sondages, part_sondages')
       .eq('gagnant', true).order('election_id').order('jour')),
     all(() => db.from('bilan_premier_a_voir').select('election_id, source, genre, juste, jours_avance').order('election_id').order('source')),
     all(() => db.from('markets').select('election_id, candidate_name, volume, last_price, closed').order('condition_id')),
@@ -112,6 +117,10 @@ async function load() {
       id: e.id, country: region.of(e.country), year: e.id.split('-')[1], vote,
       winner: days[0].candidat, loser: final.find((r) => r.candidate !== days[0].candidat)?.candidate, share: final[0].value,
       evePolls: eve ? +eve.proba_sondages : null, eveMarket: eve ? +eve.polymarket : null,
+      // Part du vainqueur entre les deux premiers : dernière semaine de sondages la veille, et résultat.
+      evePart: eve && eve.part_sondages != null ? +eve.part_sondages : null,
+      result2: final.length >= 2 ? 100 * final[0].value / (final[0].value + final[1].value) : null,
+      excluded: EXCLUDED.has(e.id),
       brierPolls: brier('proba_sondages'), brierMarket: brier('polymarket'), stakes: stakes(e, vote),
       series: days.map((d) => ({ date: utc(d.jour), polls: +d.proba_sondages, market: +d.polymarket })),
     };
@@ -120,7 +129,8 @@ async function load() {
   }).filter(Boolean).sort((a, b) => b.vote - a.vote);
 
   // Classement des sources sur les élections retenues.
-  const ids = new Set(matches.map((m) => m.id));
+  const counted = matches.filter((m) => !m.excluded);
+  const ids = new Set(counted.map((m) => m.id));
   const bySource = new Map();
   first.filter((f) => ids.has(f.election_id)).forEach((f) => {
     const s = bySource.get(f.source) || { source: f.source, genre: f.genre, rows: [] };
@@ -144,7 +154,7 @@ async function load() {
   const live = elections.find((e) => e.id === LIVE);
   const liveVote = live && (live.second_round_date || live.election_date);
   return {
-    people, matches, ranking, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
+    people, matches, counted, ranking, night, favoris, liveVote: liveVote ? utc(liveVote) : null, liveFirst: live?.election_date ? utc(live.election_date) : null,
     live: { ...liveSummary(people, markets.filter((m) => m.election_id === LIVE), livePolls), stakes: live ? stakes(live, today) : null },
   };
 }
@@ -336,7 +346,7 @@ function renderSheet({ people, matches }) {
   const tip = $('tip');
   matches.forEach((m) => {
     const li = el('li');
-    const a = el('a', 'match ' + m.camp);
+    const a = el('a', 'match ' + m.camp + (m.excluded ? ' excluded' : ''));
     a.href = 'election.html?e=' + m.id;
     const name = people.get(m.winner)?.full || m.winner;
     const s = m.stakes;
@@ -361,7 +371,8 @@ function renderSheet({ people, matches }) {
       strip.append(d);
     });
     const res = el('span', 'camp ' + m.camp);
-    res.append(el('span', 'camp-name', CAMP[m.camp]), el('span', 'camp-eve',
+    if (m.excluded) res.append(el('span', 'camp-name', 'Hors décompte'), el('span', 'camp-eve', 'choix éditorial'));
+    else res.append(el('span', 'camp-name', CAMP[m.camp]), el('span', 'camp-eve',
       'erreur ' + dec2.format(Math.min(m.brierPolls, m.brierMarket)) + ' contre ' + dec2.format(Math.max(m.brierPolls, m.brierMarket))));
     a.append(who, strip, res);
 
@@ -429,11 +440,17 @@ function renderRanking({ ranking }) {
 }
 
 // --- Compte à rebours : à J-d du vote décisif, le favori de chaque camp a-t-il fini par gagner ?
+// bilan_favoris donne, à la ligne d, la cote d'avant le jour J-d (la veille au soir de J-d) : la cote à la fin
+// de J-d est donc à la ligne d-1, comme la cote « la veille » de bilan_quotidien. Les sondages restent ceux
+// terminés avant J-d.
 function favoriteAt(favoris, matches, d) {
   return matches.map((m) => {
-    const row = favoris.find((f) => f.election_id === m.id && f.jours === d);
-    const pick = (name, value) => (name ? { name, value: +value, right: name === row.gagnant } : null);
-    return { m, polls: row && pick(row.favori_sondages, row.moyenne_sondages), market: row && pick(row.favori_marche, row.proba_marche) };
+    const row = (k) => favoris.find((f) => f.election_id === m.id && f.jours === k);
+    const polls = row(d);
+    const market = row(d - 1);
+    const pick = (name, value, r) => (name ? { name, value: +value, right: name === r.gagnant } : null);
+    return { m, polls: polls && pick(polls.favori_sondages, polls.moyenne_sondages, polls),
+             market: market && pick(market.favori_marche, market.proba_marche, market) };
   });
 }
 
@@ -445,7 +462,7 @@ function tally(rows, camp) {
 const longDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 function renderCountdown(data) {
-  const { favoris, matches, liveVote, live, people } = data;
+  const { favoris, matches, excluded = [], liveVote, live, people } = data;
   if (!favoris || !favoris.length || !liveVote) return;
   const today = utc(isoDay(new Date()));
   const J = Math.round((liveVote - today) / DAY);
@@ -536,12 +553,102 @@ function renderCountdown(data) {
       });
       grid.append(li);
     });
+    excluded.forEach((m) => {
+      const li = el('li', 'cd-card empty excluded');
+      const head = el('div', 'cd-card-head');
+      head.append(el('span', 'country', m.country + ' ' + m.year.slice(2)));
+      li.append(head);
+      grid.append(li);
+    });
     draw();
   };
   range.addEventListener('input', () => show(+range.value));
   show(selected);
   let w = target.clientWidth;
   new ResizeObserver(() => { if (target.clientWidth !== w) { w = target.clientWidth; draw(); } }).observe(target);
+}
+
+// --- Ce que disent les chiffres : trois encadrés, chacun calculé, titre compris.
+function renderInsights({ counted, matches, favoris }) {
+  const out = matches.filter((m) => m.excluded);
+  $('excluded-note').textContent = out.length
+    ? out.map((m) => m.country + ' ' + m.year).join(', ') + ' écarté' + (out.length > 1 ? 's' : '') + ' des totaux des deux camps'
+    : 'aucune élection écartée';
+  const box = $('insights');
+  box.replaceChildren();
+  const card = (cls, kicker, title) => {
+    const c = el('article', 'insight ' + cls);
+    c.append(el('p', 'insight-kicker', kicker), el('h3', '', title));
+    box.append(c);
+    return c;
+  };
+
+  // 1. Le bon favori à J-100, J-30 et la veille.
+  if (favoris && favoris.length) {
+    const moments = [[100, 'J-100'], [30, 'J-30'], [1, 'Veille']].map(([d, label]) => {
+      const rows = favoriteAt(favoris, counted, d);
+      return { label, polls: tally(rows, 'polls'), market: tally(rows, 'market') };
+    });
+    const rate = (t) => (t.n ? t.right / t.n : 0);
+    const lead = moments.filter((m) => rate(m.market) > rate(m.polls)).length;
+    const c = card('moments', 'Le bon favori', lead >= 2 ? 'Dans les trois derniers mois, l’argent voit plus juste' : 'La rue tient tête à l’argent');
+    const grid = el('div', 'moments-grid');
+    moments.forEach((m) => {
+      grid.append(el('span', 'm-label', m.label));
+      [['polls', m.polls], ['market', m.market]].forEach(([camp, t]) => {
+        const bar = el('span', 'm-bar ' + camp);
+        const fill = el('i');
+        fill.style.width = 100 * rate(t) + '%';
+        bar.append(fill);
+        grid.append(bar, el('b', 'm-n ' + camp + '-ink', t.n ? t.right + '/' + t.n : '–'));
+      });
+    });
+    c.append(grid);
+  }
+
+  // 2. Penchant gauche-droite : écart des sondages sur le candidat le plus à droite, la veille.
+  const lean = counted.filter((m) => plusADroite[m.id] && m.evePart != null && m.result2 != null).map((m) => {
+    const gap = m.evePart - m.result2;   // écart sur le vainqueur
+    return { m, gap: plusADroite[m.id] === m.winner ? gap : -gap };
+  }).sort((a, b) => a.gap - b.gap);
+  if (lean.length) {
+    const med = median(lean.map((l) => l.gap));
+    const over = lean.filter((l) => l.gap > 0.5).length;
+    const under = lean.filter((l) => l.gap < -0.5).length;
+    const title = Math.abs(med) < 1 ? 'Les sondages ne penchent ni à gauche ni à droite'
+      : med > 0 ? 'Les sondages surestiment la droite' : 'Les sondages sous-estiment la droite';
+    const c = card('lean', 'Gauche ou droite ?', title);
+    c.append(el('p', 'insight-sub', 'Droite sous-estimée ' + under + ' fois, surestimée ' + over + ' fois · écart médian ' + signed1(med) + ' pt'));
+    const scale = Math.max(5, Math.ceil(Math.max(...lean.map((l) => Math.abs(l.gap)))));
+    const list = el('ol', 'lean-list');
+    lean.forEach((l) => {
+      const li = el('li');
+      const track = el('span', 'lean-track');
+      const bar = el('i', l.gap >= 0 ? 'pos' : 'neg');
+      bar.style.width = (50 * Math.abs(l.gap) / scale) + '%';
+      track.append(bar);
+      li.append(el('span', 'lean-name', l.m.country), track, el('span', 'lean-v', signed1(l.gap)));
+      li.title = l.m.country + ' ' + l.m.year + ' : ' + plusADroite[l.m.id] + ' ' + signed1(l.gap) + ' point dans les sondages';
+      list.append(li);
+    });
+    const axis = el('div', 'lean-axis');
+    axis.append(el('span', '', '← droite sous-estimée'), el('span', '', 'droite surestimée →'));
+    c.append(list, axis);
+  }
+
+  // 3. Le vainqueur sous-estimé.
+  const win = counted.filter((m) => m.evePart != null && m.result2 != null).map((m) => m.evePart - m.result2);
+  if (win.length) {
+    const under = win.filter((g) => g < -0.5).length;
+    const c = card('winner', 'Le vainqueur', under * 2 > win.length ? 'Les sondages sous-estiment souvent le vainqueur'
+      : under * 2 === win.length ? 'Les sondages sous-estiment un vainqueur sur deux' : 'Les sondages sous-estiment rarement le vainqueur');
+    const big = el('p', 'insight-big');
+    big.append(el('span', 'polls-ink', under + '/' + win.length), el('small', '', 'fois sous-estimé la veille'));
+    const mean = win.reduce((a, g) => a + Math.abs(g), 0) / win.length;
+    const big2 = el('p', 'insight-big');
+    big2.append(el('span', '', pct.format(mean)), el('small', '', 'points d’erreur moyenne entre les deux finalistes'));
+    c.append(big, big2);
+  }
 }
 
 function skeleton() {
@@ -551,8 +658,9 @@ function skeleton() {
 
 skeleton();
 load().then((data) => {
-  renderScore(data);
-  renderCountdown(data);
+  renderScore({ ...data, matches: data.counted });
+  renderCountdown({ ...data, matches: data.counted, excluded: data.matches.filter((m) => m.excluded) });
+  renderInsights(data);
   renderLast(data);
   renderSheet(data);
   renderLive(data);

@@ -142,3 +142,34 @@
   .cd-card-head { flex-direction: column; gap: 0; }
   .cd-v { font-size: 14px; }
 }
+
+/* Ce que disent les chiffres */
+.insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+.insight { border-top: 2px solid var(--fg); padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.insight-kicker { margin: 0; font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.insight h3 { margin: 0; font-family: var(--display); font-stretch: 80%; font-weight: 800; font-size: 22px; line-height: 1.05; text-transform: uppercase; }
+.insight-sub { margin: 0; font-size: 13px; color: var(--muted); }
+.moments-grid { display: grid; grid-template-columns: 4em minmax(0, 1fr) 3.2em; gap: 4px 10px; align-items: center; }
+.m-label { grid-row: span 2; font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; }
+.m-bar { position: relative; height: 20px; background: var(--track); display: flex; align-items: center; }
+.m-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.m-bar.polls i { background: var(--polls); } .m-bar.market i { background: var(--market); }
+.m-n { font-family: var(--display); font-stretch: 85%; font-weight: 800; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
+.lean-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.lean-list li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 12px; }
+.lean-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lean-track { position: relative; height: 10px; }
+.lean-track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--fg); }
+.lean-track i { position: absolute; top: 0; bottom: 0; background: var(--fg); }
+.lean-track i.pos { left: 50%; } .lean-track i.neg { right: 50%; }
+.lean-v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.lean-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); white-space: nowrap;
+  margin: 0 calc(3em + 8px) 0 calc(6.5em + 8px); }
+.insight-big { margin: 0; display: flex; align-items: baseline; gap: 10px; }
+.insight-big span { font-family: var(--display); font-stretch: 62%; font-weight: 900; font-size: 64px; line-height: .9; }
+.insight-big small { font-size: 13px; color: var(--muted); max-width: 14em; }
+
+/* Élection écartée des totaux */
+.match.excluded { opacity: .45; }
+.match.excluded .camp-name { color: var(--muted); font-size: 14px; }
+.cd-card.excluded .cd-card-head::after { content: "hors décompte"; }

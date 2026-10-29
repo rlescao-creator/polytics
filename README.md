@@ -121,6 +121,8 @@ les couleurs de la table `parties`, et les « candidats en tête » sont calcul�
 - `suivi.html` + `suivi.js` : « Mon suivi », connexion par e-mail (Supabase Auth) et favoris par utilisateur.
 
 `style.css` porte la direction artistique commune (papier, encre ; vermillon = sondages, outremer = marché).
+`web/config.js` porte aussi deux choix éditoriaux de l'accueil : `exclus` (élections écartées des totaux des
+deux camps, leur ligne reste affichée) et `plusADroite` (candidat le plus à droite de chaque duel final).
 `web/config.js` contient l'adresse du projet et sa clé publique (prévue pour le navigateur).
 
 ```bash
