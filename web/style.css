@@ -46,9 +46,9 @@ h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .who { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .who .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
 .who small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
-.meter { display: grid; grid-template-columns: 4.2em minmax(0, 1fr); align-items: center; gap: 10px; }
+.meter { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 10px; }
 .meter .num { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
-.meter .num small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.meter .num small { display: block; white-space: nowrap; font-weight: 400; color: var(--muted); font-size: 11px; }
 .meter .num.none { color: var(--faint); font-weight: 400; }
 .track { position: relative; height: 14px; background: var(--track); border-radius: 2px; }
 .track .bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }

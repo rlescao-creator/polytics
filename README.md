@@ -98,9 +98,16 @@ Migrations dans `supabase/migrations/`, à appliquer dans l'ordre.
 Aucun nom de candidat ni couleur n'est écrit dans le tableau de bord : les noms viennent des sondages,
 les couleurs de la table `parties`, et les « candidats en tête » sont calculés par les fonctions.
 
-## Application web « Mon suivi 2027 »
+## Application web
 
-`web/` : connexion par e-mail (Supabase Auth), liste des candidats, favoris par utilisateur.
+`web/` (sans compilation, bibliothèques chargées depuis jsDelivr) :
+
+- `index.html` + `app.js` + `style.css` : page **Présidentielle 2027**. Moyenne des sondages du 1er tour
+  (un sondage compte une fois, ses hypothèses moyennées ; 30 jours, 3 sondages minimum) à côté de la cote
+  Polymarket, chacune sur sa propre échelle ; courbes avec Observable Plot (moyenne des 5 derniers sondages
+  sur 90 jours au plus) ; derniers sondages avec commanditaire et notice. Titre et accroche calculés.
+- `suivi.html` + `suivi.js` : « Mon suivi », connexion par e-mail (Supabase Auth) et favoris par utilisateur.
+
 `web/config.js` contient l'adresse du projet et sa clé publique (prévue pour le navigateur).
 
 ```bash
