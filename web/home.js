@@ -517,8 +517,13 @@ function renderCountdown(data) {
       const p = live.pollTop[0];
       const mk = live.marketTop[0];
       if (p && mk) {
-        deck.append('Pour 2027, aujourd’hui\u00a0: la rue met ', b(name(p.candidate) + ' (' + pct0.format(p.value) + ' %)', 'polls-ink'),
-          ' en tête, l’argent ', b(name(mk.candidate) + ' (' + pct0.format(mk.value) + ' %)', 'market-ink'), '.');
+        if (p.candidate === mk.candidate) {
+          deck.append('Pour 2027, aujourd’hui\u00a0: la rue et l’argent mettent tous deux ', b(name(p.candidate), ''), ' en tête (',
+            b(pct0.format(p.value) + ' % des intentions de vote', 'polls-ink'), ', ', b(pct0.format(mk.value) + ' % de chances', 'market-ink'), ').');
+        } else {
+          deck.append('Pour 2027, aujourd’hui\u00a0: la rue met ', b(name(p.candidate) + ' (' + pct0.format(p.value) + ' %)', 'polls-ink'),
+            ' en tête, l’argent ', b(name(mk.candidate) + ' (' + pct0.format(mk.value) + ' %)', 'market-ink'), '.');
+        }
       }
     }
     const grid = $('cd-grid');
