@@ -85,3 +85,57 @@ h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .method h2 { color: var(--fg); font-size: 14px; }
 .method p { margin: 0; max-width: 80ch; }
 .method b { color: var(--fg); font-weight: 500; }
+
+/* Sélecteur d'élection : une rangée qui défile sur mobile */
+.picker { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: -8px -16px 0; padding: 4px 16px 8px;
+  mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+.picker::-webkit-scrollbar { display: none; }
+.chip { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+  text-decoration: none; font-size: 13px; color: var(--muted); background: var(--panel); white-space: nowrap; }
+.chip:hover { color: var(--fg); border-color: var(--faint); }
+.chip[aria-current] { color: var(--bg); background: var(--fg); border-color: var(--fg); }
+.chip .flag { font-size: 15px; line-height: 1; }
+.chip .live { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #c0392b; display: inline-flex; align-items: center; gap: 4px; }
+.chip .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip[aria-current] .live { color: #ff8a80; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+/* Tour */
+.rounds { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 2px; align-self: flex-start; background: var(--panel); }
+.rounds[hidden] { display: none; }
+.seg { font: inherit; font-size: 13px; padding: 6px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.seg[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+/* Tableau : nom cliquable, mise en avant, trait de la moyenne des sondages */
+button.who { font: inherit; color: inherit; background: none; border: 0; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; cursor: pointer; text-align: left; }
+button.who:hover { background: var(--track); }
+.row.focused button.who { background: var(--track); }
+.row.dimmed .cell { opacity: .45; }
+.row .cell { transition: opacity .15s; }
+.track .tick { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; background: var(--fg); border-radius: 1px; box-shadow: 0 0 0 1.5px var(--bg); }
+.hint { margin: -6px 0 0; color: var(--faint); font-size: 12px; }
+button.link { font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+
+/* Qui l'a vu en premier */
+.first { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.src { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(0, 3fr) 4.5em; gap: 14px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.src-name { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.src-name small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+.src .bar { background: var(--muted); }
+.src.key .src-name { font-weight: 600; }
+.src.key .bar { background: var(--fg); }
+.src .days { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.src.never .days { color: var(--faint); font-weight: 400; }
+.src.never .src-name { color: var(--muted); }
+
+/* Chargement */
+.skel { display: block; background: var(--track); border-radius: 6px; position: relative; overflow: hidden; }
+.skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--panel) 60%, transparent), transparent);
+  transform: translateX(-100%); animation: shimmer 1.2s infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skel::after { animation: none; } }
+.board > .skel-row { display: block; grid-column: 1 / -1; height: 36px; margin: 6px 0; }
+.skel-chart { height: 300px; }
+.skel-card { height: 180px; }
+.skel-line { height: 24px; margin: 6px 0; }
+.skel-text { display: inline-block; width: min(100%, 520px); height: 1.2em; }

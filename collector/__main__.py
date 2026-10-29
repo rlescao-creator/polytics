@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from . import check, media_polls, notices, polymarket, polymarket_legacy, wikipedia_polls
-from .config import ELECTIONS
+from .config import ELECTIONS, RESULTS
 from .db import connect
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,6 +69,24 @@ def live_elections(margin_days=7):
             or date.fromisoformat(e["second_round_date"] or e["election_date"]) >= limit]
 
 
+def refresh_bilans(con, elections):
+    """Recalcule les bilans précalculés (table bilan_*) des élections passées qu'on vient de relire.
+
+    Postgres seulement ; environ 17 s par élection. Sans la migration bilans_precalcules, ne fait rien.
+    """
+    if con.dialect != "postgres":
+        return
+    for eid in [e for e in (elections or ELECTIONS) if e in RESULTS]:
+        try:
+            con.execute("SELECT rafraichir_bilans(?)", (eid,))
+            con.commit()
+            print(f"[bilans] {eid} recalculé")
+        except Exception as e:  # fonction absente ou trop longue : la page retombe sur le calcul à la volée
+            con.con.rollback()
+            print(f"[bilans] {eid} : {type(e).__name__}: {e}")
+            return
+
+
 def scheduled(con, args, data_dir):
     """Un passage de tâche planifiée (GitHub Actions, cron) : lancée chaque heure, elle se termine à chaque fois.
 
@@ -94,6 +112,7 @@ def scheduled(con, args, data_dir):
             ("polls", lambda: wikipedia_polls.collect(con, elections)),
             ("notices", lambda: notices.collect(con, data_dir / "notices")),
         ]
+    steps.append(("bilans", lambda: refresh_bilans(con, elections)))
     failed = []
     for name, run in steps:
         try:
@@ -138,6 +157,8 @@ def main():
         polymarket.collect(con, args.election)
     if args.command in ("all", "polls"):
         wikipedia_polls.collect(con, args.election)
+    if args.command in ("all", "polymarket", "polls"):
+        refresh_bilans(con, args.election)
     if args.command in ("all", "notices"):
         notices.collect(con, data_dir / "notices", refresh=args.refresh_notices)
     if args.command in ("all", "media"):

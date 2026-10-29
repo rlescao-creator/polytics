@@ -106,10 +106,14 @@ les couleurs de la table `parties`, et les « candidats en tête » sont calcul�
 
 `web/` (sans compilation, bibliothèques chargées depuis jsDelivr) :
 
-- `index.html` + `app.js` + `style.css` : page **Présidentielle 2027**. Moyenne des sondages du 1er tour
-  (un sondage compte une fois, ses hypothèses moyennées ; 30 jours, 3 sondages minimum) à côté de la cote
-  Polymarket, chacune sur sa propre échelle ; courbes avec Observable Plot (moyenne des 5 derniers sondages
-  sur 90 jours au plus) ; derniers sondages avec commanditaire et notice. Titre et accroche calculés.
+- `index.html` + `app.js` + `style.css` : une page par élection (`?e=br-2026`, `&tour=1|2`), 2027 par défaut,
+  sélecteur de pays en haut. Moyenne des sondages (un sondage compte une fois, ses hypothèses moyennées ;
+  30 jours, 3 sondages minimum) à côté de la cote Polymarket, chacune sur sa propre échelle ; courbes avec
+  Observable Plot (moyenne des 5 derniers sondages sur 90 jours au plus) ; derniers sondages avec
+  commanditaire et notice. Titre et accroche calculés. Cliquer un candidat le met en avant dans les graphiques.
+  Élections passées : résultat comparé à la dernière moyenne (part des voix entre les candidats du résultat),
+  cote la veille du vote, « qui l'a vu en premier » et chance de victoire jour par jour, lus dans les tables
+  `bilan_premier_a_voir` et `bilan_quotidien` (sinon calculés à la volée, souvent au-delà des 3 s permises).
 - `suivi.html` + `suivi.js` : « Mon suivi », connexion par e-mail (Supabase Auth) et favoris par utilisateur.
 
 `web/config.js` contient l'adresse du projet et sa clé publique (prévue pour le navigateur).
